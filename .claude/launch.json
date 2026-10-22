@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "foldable",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5179", "--strictPort"],
+      "port": 5179
+    },
+    {
+      "name": "foldable-dist",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5180", "--strictPort"],
+      "env": { "FOLDABLE_DIST": "1" },
+      "port": 5180
+    }
+  ]
+}

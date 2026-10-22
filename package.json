@@ -1,0 +1,89 @@
+{
+  "name": "foldable-magazine",
+  "version": "0.1.0",
+  "description": "A 3D magazine you can flip through, with paper that bends, rolls and casts shadows. Built on three.js, with React, Vue, Svelte and Web Component bindings.",
+  "keywords": [
+    "magazine",
+    "flipbook",
+    "page-flip",
+    "page-turn",
+    "three",
+    "webgl",
+    "react",
+    "vue",
+    "svelte",
+    "web-component"
+  ],
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./element": {
+      "types": "./dist/element.d.ts",
+      "import": "./dist/element.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "import": "./dist/svelte.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "./dist/element.js"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsup && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "build:demo": "vite build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "svelte": ">=4",
+    "three": ">=0.160.0",
+    "vue": ">=3.3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "svelte": "^5.57.2",
+    "three": "^0.186.1",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vue": "^3.5.44"
+  }
+}

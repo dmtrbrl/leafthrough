@@ -1,0 +1,105 @@
+:root {
+  --bg: #f4f2ec;
+  --line: rgba(80, 110, 200, 0.12);
+  --text: #2a2926;
+  --muted: #8a877f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 "SF Mono", Menlo, ui-monospace, monospace;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: center;
+}
+
+header,
+footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+}
+
+nav {
+  display: flex;
+  gap: 14px;
+}
+
+nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+nav a[aria-current="page"] {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 12px;
+}
+
+/* The magazine fits itself inside this box. With bleed (the spread's default) lifted
+   pages spill past it, so give it some room. */
+.magazine {
+  width: min(84vw, 1100px);
+  height: min(70vh, 760px);
+}
+
+.magazine:focus-within [data-foldable]:focus-visible {
+  outline: 2px solid #3a5fd9;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #d8d4c8;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.status {
+  color: var(--muted);
+}

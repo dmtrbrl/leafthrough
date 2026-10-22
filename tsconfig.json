@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": [
+      "vite/client",
+      "node"
+    ],
+    "noEmit": true,
+    "paths": {
+      "foldable-magazine": [
+        "./src/index.ts"
+      ],
+      "foldable-magazine/element": [
+        "./src/element.ts"
+      ],
+      "foldable-magazine/react": [
+        "./src/react.tsx"
+      ],
+      "foldable-magazine/vue": [
+        "./src/vue.ts"
+      ],
+      "foldable-magazine/svelte": [
+        "./src/svelte.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "demo",
+    "vite.config.ts",
+    "tsup.config.ts"
+  ]
+}
