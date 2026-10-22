@@ -4,6 +4,8 @@ A 3D magazine you can flip through. Pages are printed paper: they bend, roll, ca
 light and cast shadows. Built on three.js, written in TypeScript, with bindings for React,
 Vue, Svelte, and a Web Component for everything else (Angular, Solid, Lit, plain HTML).
 
+**[Live demo](https://dmtrbrl.github.io/leafthrough/)**, with one page per binding.
+
 - **Two layouts.** `spread` is an open magazine with sheets turning over the spine.
   `single` shows one page at a time, and read pages roll up behind the magazine. `auto`
   picks between them with a media query.
@@ -246,7 +248,7 @@ npm install
 npm run dev          # demo playground: vanilla, React, Vue, Svelte and Web Component pages
 npm run typecheck
 npm run build        # dist/: ESM bundles + type declarations
-npm run build:demo   # static demo site in dist-demo/
+npm run build:demo   # static demo site in dist-demo/ (published to GitHub Pages on every push to main)
 LEAFTHROUGH_DIST=1 npx vite   # run the demo against the built dist/ instead of src/
 ```
 

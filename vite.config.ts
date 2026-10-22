@@ -11,6 +11,9 @@ const lib = (entry: string) =>
 
 export default defineConfig({
   root: 'demo',
+  // relative asset URLs, so the built demo works under any path (GitHub Pages serves it
+  // from /leafthrough/)
+  base: './',
   plugins: [react(), vue(), svelte()],
   resolve: {
     alias: [
