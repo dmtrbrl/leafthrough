@@ -1,47 +1,59 @@
 <script setup lang="ts">
 import { ref, shallowRef } from 'vue'
-import { LeafThrough, type Layout, type PageChangeDetail } from 'leafthrough/vue'
-import { generatePages } from './pages'
+import { LeafThrough, type LeafThroughOptions } from 'leafthrough/vue'
+import { createDevPanel, type MagazineHandle } from './panel'
 
-const pages = shallowRef(generatePages())
-const magazine = ref<InstanceType<typeof LeafThrough> & { next(): boolean; prev(): boolean; goTo(page: number, o?: { animate?: boolean }): void }>()
-const visible = ref<number[]>([13, 14])
-const layout = ref<'auto' | Layout>('auto')
-const grain = ref(true)
+// The panel drives the component through its props, and its methods through the
+// template ref; events arrive as Vue events.
+interface Exposed {
+  next(): boolean
+  prev(): boolean
+  goTo(page: number, options?: { animate?: boolean }): void
+  instance: MagazineHandle | null
+}
+const magazine = ref<Exposed>()
+const key = ref(0)
 
-const onPageChange = (detail: PageChangeDetail) => (visible.value = detail.visiblePages)
+const panel = createDevPanel(document.getElementById('panel')!, {
+  apply: (next) => (options.value = next),
+  remount: (next) => {
+    options.value = next
+    key.value++
+  },
+  handle: (): MagazineHandle | null => {
+    const exposed = magazine.value
+    const instance = exposed?.instance
+    if (!exposed || !instance) return null
+    return {
+      next: () => exposed.next(),
+      prev: () => exposed.prev(),
+      goTo: (page, goToOptions) => exposed.goTo(page, goToOptions),
+      get page() {
+        return instance.page
+      },
+      get pageCount() {
+        return instance.pageCount
+      },
+      get visiblePages() {
+        return instance.visiblePages
+      },
+      get layout() {
+        return instance.layout
+      },
+    }
+  },
+})
+const options = shallowRef<LeafThroughOptions>(panel.options())
 </script>
 
 <template>
-  <main>
-    <LeafThrough
-      ref="magazine"
-      class="magazine"
-      :pages="pages"
-      :start-page="14"
-      :layout="layout"
-      :paper="{ grain }"
-      :interaction="{ keyboard: 'global' }"
-      @pagechange="onPageChange"
-    />
-  </main>
-  <footer>
-    <div class="controls">
-      <button @click="magazine?.prev()">← Prev</button>
-      <button @click="magazine?.next()">Next →</button>
-      <button @click="magazine?.goTo(0, { animate: true })">Riffle to cover</button>
-      <span class="status" id="status">{{ visible.map((p) => p + 1).join('–') || 'closed' }} / {{ pages.length }}</span>
-    </div>
-    <div class="controls">
-      <label>
-        Layout
-        <select v-model="layout">
-          <option>auto</option>
-          <option>spread</option>
-          <option>single</option>
-        </select>
-      </label>
-      <label><input v-model="grain" type="checkbox" /> Grain</label>
-    </div>
-  </footer>
+  <LeafThrough
+    :key="key"
+    ref="magazine"
+    class="magazine"
+    v-bind="options"
+    @pagechange="(detail) => panel.event('pagechange', detail)"
+    @ready="() => panel.event('ready')"
+    @error="(error, page) => panel.event('error', { message: String(error), page })"
+  />
 </template>

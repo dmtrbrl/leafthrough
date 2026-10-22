@@ -1,8 +1,12 @@
 :root {
   --bg: #f4f2ec;
+  --surface: #fbfaf6;
   --line: rgba(80, 110, 200, 0.12);
+  --border: #dedad0;
   --text: #2a2926;
   --muted: #8a877f;
+  --accent: #3a5fd9;
+  --panel-width: 360px;
 }
 
 * {
@@ -21,7 +25,7 @@ body {
 body {
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow: hidden;
   background-image:
     linear-gradient(var(--line) 1px, transparent 1px),
     linear-gradient(90deg, var(--line) 1px, transparent 1px);
@@ -29,26 +33,43 @@ body {
   background-position: center;
 }
 
-header,
-footer {
+a {
+  color: inherit;
+}
+
+/* --- header --------------------------------------------------------------------- */
+
+header {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 20px;
+  gap: 8px 24px;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
+  padding: 14px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 600;
+  text-decoration: none;
 }
 
 nav {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  flex: 1;
 }
 
 nav a {
   color: var(--muted);
   text-decoration: none;
+}
+
+nav a:hover {
+  color: var(--text);
 }
 
 nav a[aria-current="page"] {
@@ -57,49 +78,271 @@ nav a[aria-current="page"] {
   text-underline-offset: 4px;
 }
 
-main {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  padding: 12px;
-}
-
-/* The magazine fits itself inside this box. With bleed (the spread's default) lifted
-   pages spill past it, so give it some room. */
-.magazine {
-  width: min(84vw, 1100px);
-  height: min(70vh, 760px);
-}
-
-.magazine:focus-within [data-leafthrough]:focus-visible {
-  outline: 2px solid #3a5fd9;
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-button,
-select {
-  font: inherit;
-  color: inherit;
-  background: #fff;
-  border: 1px solid #d8d4c8;
-  border-radius: 6px;
-  padding: 5px 10px;
-  cursor: pointer;
-}
-
-label {
+.github {
   display: inline-flex;
   gap: 6px;
   align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  text-decoration: none;
 }
 
-.status {
+.github:hover {
+  border-color: var(--text);
+}
+
+/* --- workspace: the magazine and the dev panel ------------------------------------- */
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-width);
+}
+
+.stage {
+  position: relative;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 7vh 6vw;
+}
+
+/* The magazine fits itself inside this box. With bleed (the default), turning pages
+   spill past it, so the padding above leaves them room. */
+.magazine {
+  width: 100%;
+  height: 100%;
+}
+
+.magazine [data-leafthrough]:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* --- dev panel ----------------------------------------------------------------------- */
+
+.panel {
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+
+.dev-panel details {
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+}
+
+.dev-panel summary {
+  cursor: pointer;
+  padding: 11px 0;
+  font-weight: 600;
+  user-select: none;
+}
+
+.dev-panel details[open] {
+  padding-bottom: 12px;
+}
+
+.dev-panel .row {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr) 22px;
+  gap: 8px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.dev-panel .name {
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-panel .name[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.dev-panel .row.is-set .name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dev-panel .field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.dev-panel .field input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.dev-panel .field input[type="text"],
+.dev-panel .field select {
+  flex: 1;
+  min-width: 0;
+}
+
+.dev-panel .field input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.dev-panel .vec3 {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dev-panel output {
+  min-width: 44px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dev-panel .reset {
+  visibility: hidden;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+
+.dev-panel .row.is-set .reset {
+  visibility: visible;
+}
+
+.dev-panel .reset:hover {
+  color: var(--text);
+}
+
+.dev-panel .buttons,
+.dev-panel .goto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.dev-panel .goto input[type="number"] {
+  width: 64px;
+}
+
+.dev-panel .readout {
+  display: grid;
+  grid-template-columns: 116px 1fr;
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.dev-panel dt {
+  color: var(--muted);
+}
+
+.dev-panel dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-panel .log {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.dev-panel .log li {
+  padding: 3px 0;
+  border-top: 1px dashed var(--border);
+  overflow-wrap: anywhere;
+}
+
+.dev-panel .log time {
+  color: var(--muted);
+}
+
+.dev-panel .log code {
+  color: var(--muted);
+}
+
+.dev-panel pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  overflow-x: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+button,
+select,
+input[type="text"],
+input[type="number"] {
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--text);
+}
+
+/* --- narrow screens: magazine on top, panel below ------------------------------------- */
+
+@media (max-width: 860px) {
+  /* first row: brand and GitHub; second row: the binding links */
+  header {
+    justify-content: space-between;
+    row-gap: 10px;
+  }
+
+  nav {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  body {
+    overflow: auto;
+    height: auto;
+  }
+
+  .workspace {
+    display: block;
+  }
+
+  .stage {
+    height: 72svh;
+    padding: 5vh 8vw;
+  }
+
+  .panel {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    overflow: visible;
+  }
 }

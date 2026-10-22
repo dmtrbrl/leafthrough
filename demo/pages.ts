@@ -1,9 +1,9 @@
 // Placeholder artwork for the demo: a 28-page issue drawn on canvases. Each canvas is a
 // valid page source for the magazine.
-const SHEET_ASPECT = 1.377
 
 const PX_W = 768
-const PX_H = Math.round(PX_W * SHEET_ASPECT)
+// set per call to generatePages(), so the artwork matches the page aspect
+let PX_H = Math.round(PX_W * 1.377)
 const MONO = '"SF Mono", "JetBrains Mono", Menlo, ui-monospace, monospace'
 
 interface Theme {
@@ -234,7 +234,9 @@ function drawCover(ctx: CanvasRenderingContext2D, theme: Theme, back: boolean) {
   ctx.textAlign = 'left'
 }
 
-export function generatePages(count = 28): HTMLCanvasElement[] {
+/** Draws `count` pages (front cover first) at `aspect` (height ÷ width). */
+export function generatePages(count = 28, aspect = 1.377): HTMLCanvasElement[] {
+  PX_H = Math.round(PX_W * aspect)
   const pages = []
   const cover = canvas(PX_W, PX_H)
   let ctx = cover.getContext('2d')!

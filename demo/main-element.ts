@@ -1,33 +1,49 @@
 import 'leafthrough/element'
 import type { LeafThroughElement } from 'leafthrough/element'
-import { generatePages } from './pages'
+import type { LeafThroughOptions } from 'leafthrough'
+import { createDevPanel } from './panel'
 import './style.css'
 
-// Plain HTML: attributes for the simple options, the `pages` property for canvases (a
-// list of <img> children or a `pages` attribute with URLs works too).
-document.querySelector('#app')!.innerHTML = `
-  <main>
-    <leaf-through class="magazine" start-page="14" keyboard="global" label="Foldable, issue 01"></leaf-through>
-  </main>
-  <footer>
-    <div class="controls">
-      <button id="prev">← Prev</button>
-      <button id="next">Next →</button>
-      <span class="status" id="status"></span>
-    </div>
-    <div class="controls">
-      <label>Layout <select id="layout"><option>auto</option><option>spread</option><option>single</option></select></label>
-    </div>
-  </footer>
-`
+// The panel drives <leaf-through> through its `options` property and its methods;
+// events arrive as DOM events.
+const stage = document.getElementById('stage')!
+let element: LeafThroughElement | null = null
 
-const magazine = document.querySelector('leaf-through') as LeafThroughElement
-const status = document.getElementById('status')!
-magazine.pages = generatePages()
-magazine.addEventListener('pagechange', (e) => {
-  const { visiblePages, pageCount } = (e as CustomEvent).detail
-  status.textContent = `${visiblePages.map((p: number) => p + 1).join('–') || 'closed'} / ${pageCount}`
+function create(options: LeafThroughOptions) {
+  element?.remove()
+  element = document.createElement('leaf-through')
+  element.className = 'magazine'
+  element.options = options
+  element.addEventListener('pagechange', (e) => panel.event('pagechange', e.detail))
+  element.addEventListener('ready', () => panel.event('ready'))
+  element.addEventListener('pageerror', (e) => panel.event('pageerror', { message: String(e.detail.error), page: e.detail.page }))
+  stage.append(element)
+}
+
+const panel = createDevPanel(document.getElementById('panel')!, {
+  apply: (options) => element && (element.options = options),
+  remount: create,
+  handle: () => {
+    const el = element
+    if (!el?.instance) return null
+    return {
+      next: () => el.next(),
+      prev: () => el.prev(),
+      goTo: (page, options) => el.goTo(page, options),
+      get page() {
+        return el.page
+      },
+      get pageCount() {
+        return el.pageCount
+      },
+      get layout() {
+        return el.layout
+      },
+      get visiblePages() {
+        return el.instance?.visiblePages ?? []
+      },
+    }
+  },
 })
-document.getElementById('prev')!.onclick = () => magazine.prev()
-document.getElementById('next')!.onclick = () => magazine.next()
-document.getElementById('layout')!.onchange = (e) => magazine.setAttribute('layout', (e.target as HTMLSelectElement).value)
+
+create(panel.options())
