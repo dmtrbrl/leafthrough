@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { ResolvedSettings } from '../options.js'
-import { createSheetMesh, type SheetMesh, type SheetUniforms } from '../paper/paperMaterial.js'
+import { createSheetMesh, type SheetMesh, type SheetShading, type SheetUniforms } from '../paper/paperMaterial.js'
 
 // Single-layout sheet: one page per sheet, printed on the front only. Pages that have been
 // read don't land on a left stack; they swing around the spine and roll up around a cone
@@ -124,6 +124,8 @@ export interface SingleSheetUniforms extends SheetUniforms {
   uFront: THREE.IUniform<THREE.Texture>
   uBack: THREE.IUniform<THREE.Texture>
   uPattern: THREE.IUniform<THREE.Texture>
+  uSpineContact: THREE.IUniform<THREE.Vector3>
+  uLightDirection: THREE.IUniform<THREE.Vector3>
 }
 
 export function createSingleSheet(
@@ -132,6 +134,7 @@ export function createSingleSheet(
   back: THREE.Texture,
   pattern: THREE.Texture,
   settings: ResolvedSettings,
+  shading: SheetShading,
 ): { mesh: SheetMesh; uniforms: SingleSheetUniforms } {
   const uniforms: SingleSheetUniforms = {
     uPileLift: { value: new THREE.Vector3(1, 0, 0) },
@@ -144,6 +147,8 @@ export function createSingleSheet(
     uFront: { value: front },
     uBack: { value: back },
     uPattern: { value: pattern },
+    uSpineContact: shading.spineContact,
+    uLightDirection: shading.lightDirection,
   }
   const mesh = createSheetMesh(
     geometry,

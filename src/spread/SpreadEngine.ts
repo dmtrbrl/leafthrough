@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Engine, EngineContext, EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
-import { disposeSheetMesh, type SheetMesh } from '../paper/paperMaterial.js'
+import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
 import { createSpreadGeometry, createSpreadSheet, type SpreadSheetUniforms } from './spreadSheet.js'
 
 const CURVE = {
@@ -102,6 +102,7 @@ export class SpreadEngine implements Engine {
   private readonly geometry: THREE.BufferGeometry
   private readonly sheets: Sheet[]
   private readonly abort = new AbortController()
+  private readonly shading: EngineContext['shading']
 
   private current: number
   private flights: Flight[] = []
@@ -113,7 +114,6 @@ export class SpreadEngine implements Engine {
   private leader = -1 // the sheet most recently sent flying
   private dirty = true
   private last = 0
-  private inset = ''
 
   private readonly raycaster = new THREE.Raycaster()
   private readonly ndc = new THREE.Vector2()
@@ -128,6 +128,7 @@ export class SpreadEngine implements Engine {
     this.canvas = ctx.canvas
     this.hitArea = ctx.hitArea
     this.metrics = ctx.metrics
+    this.shading = ctx.shading
 
     const count = Math.ceil(ctx.textures.length / 2)
     this.maxPosition = count
@@ -137,7 +138,7 @@ export class SpreadEngine implements Engine {
     for (let i = 0; i < count; i++) {
       const front = ctx.textures[2 * i]
       const back = ctx.textures[2 * i + 1] ?? ctx.blank
-      const { mesh, uniforms } = createSpreadSheet(this.geometry, front, back, ctx.pattern, ctx.settings)
+      const { mesh, uniforms } = createSpreadSheet(this.geometry, front, back, ctx.pattern, ctx.settings, ctx.shading)
       this.sheets.push({
         index: i,
         mesh,
@@ -160,6 +161,15 @@ export class SpreadEngine implements Engine {
     return this.current
   }
 
+  // closed, only the cover side can be grabbed
+  get activeSide() {
+    const busy = this.flights.length > 0 || this.drag !== null || this.hold !== null
+    if (busy) return 'both'
+    if (this.current === 0) return 'right'
+    if (this.current === this.sheets.length) return 'left'
+    return 'both'
+  }
+
   setPageTexture(page: number, texture: THREE.Texture) {
     const sheet = this.sheets[page >> 1]
     if (!sheet) return
@@ -171,7 +181,6 @@ export class SpreadEngine implements Engine {
   dispose() {
     this.cancelHold()
     this.abort.abort()
-    this.hitArea.style.inset = ''
     for (const sheet of this.sheets) disposeSheetMesh(sheet.mesh)
     this.geometry.dispose()
   }
@@ -561,20 +570,25 @@ export class SpreadEngine implements Engine {
       this.applyUniforms(sheet)
     }
 
-    // closed, only the cover side can be grabbed
-    const busy = this.flights.length > 0 || this.drag !== null || this.hold !== null
-    const count = this.sheets.length
-    const inset = this.current === 0 && !busy ? '0 0 0 50%' : this.current === count && !busy ? '0 50% 0 0' : '0'
-    if (inset !== this.inset) this.hitArea.style.inset = this.inset = inset
-
     if (!moving && !this.dirty) return false
+    // the turning sheet standing most upright at the spine casts the contact shadow
+    let contact: Sheet | null = null
+    let upright = 0
     for (const sheet of this.sheets) {
       const i = sheet.index
       const depth = i >= this.current ? i - this.current : this.current - 1 - i
-      sheet.mesh.castShadow =
-        this.settings.lighting.shadows && (depth < 3 || this.inFlight(i) || this.drag?.index === i)
-      sheet.mesh.renderOrder = depth
+      const turning = this.inFlight(i) || this.drag?.index === i
+      sheet.mesh.castShadow = this.settings.lighting.shadows && (depth < 3 || turning)
+      layerSheet(sheet.mesh, depth, this.sheets.length, turning)
+      const lift = Math.abs(sheet.uniforms.uFlipRotation.value.y)
+      if (turning && lift > upright) {
+        upright = lift
+        contact = sheet
+      }
     }
+    const rotation = contact?.uniforms.uFlipRotation.value
+    if (rotation) this.shading.spineContact.value.set(rotation.x, rotation.y, 1)
+    else this.shading.spineContact.value.set(1, 0, 0)
     this.dirty = false
     return true
   }

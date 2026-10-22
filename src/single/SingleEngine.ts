@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Engine, EngineContext, EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
-import { disposeSheetMesh, type SheetMesh } from '../paper/paperMaterial.js'
+import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
 import { createSingleGeometry, createSingleSheet, type SingleSheetUniforms } from './singleSheet.js'
 
 // One page in view. Turned pages swing around the spine and roll up around a cone behind
@@ -155,7 +155,7 @@ export class SingleEngine implements Engine {
 
     this.geometry = createSingleGeometry(ctx.settings.pageAspect)
     this.sheets = ctx.textures.map((front, index) => {
-      const { mesh, uniforms } = createSingleSheet(this.geometry, front, ctx.blank, ctx.pattern, ctx.settings)
+      const { mesh, uniforms } = createSingleSheet(this.geometry, front, ctx.blank, ctx.pattern, ctx.settings, ctx.shading)
       this.group.add(mesh)
       return {
         index,
@@ -198,6 +198,8 @@ export class SingleEngine implements Engine {
   get position() {
     return this.current
   }
+
+  readonly activeSide = 'both'
 
   setPageTexture(page: number, texture: THREE.Texture) {
     const sheet = this.sheets[page]
@@ -592,7 +594,7 @@ export class SingleEngine implements Engine {
     for (const sheet of this.sheets) {
       const i = sheet.index
       sheet.mesh.visible = closing || i <= this.current + PILE.renderDepth || this.busy(sheet)
-      sheet.mesh.renderOrder = i < this.current ? this.current - 1 - i : i - this.current
+      layerSheet(sheet.mesh, i < this.current ? this.current - 1 - i : i - this.current, this.count, this.busy(sheet))
     }
 
     // the book eases back and to the right as the read pages pile up behind it

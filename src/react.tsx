@@ -40,19 +40,19 @@ export const LeafThrough = forwardRef<LeafThroughHandle, LeafThroughProps>(funct
   const latest = useRef(options)
   latest.current = options
 
+  const callbacks = useRef({
+    onPageChange: (detail: PageChangeDetail) => latest.current.onPageChange?.(detail),
+    onReady: () => latest.current.onReady?.(),
+    onError: (error: unknown, page?: number) => {
+      const handler = latest.current.onError
+      if (handler) handler(error, page)
+      else console.warn('[leafthrough]', error)
+    },
+    formatPageLabel: (detail: PageChangeDetail) => latest.current.formatPageLabel?.(detail) ?? defaultPageLabel(detail),
+  }).current
+
   useEffect(() => {
-    const magazine = new Magazine(element.current!, {
-      ...latest.current,
-      onPageChange: (detail: PageChangeDetail) => latest.current.onPageChange?.(detail),
-      onReady: () => latest.current.onReady?.(),
-      onError: (error: unknown, page?: number) => {
-        const handler = latest.current.onError
-        if (handler) handler(error, page)
-        else console.warn('[leafthrough]', error)
-      },
-      formatPageLabel: (detail: PageChangeDetail) =>
-        latest.current.formatPageLabel?.(detail) ?? defaultPageLabel(detail),
-    })
+    const magazine = new Magazine(element.current!, { ...latest.current, ...callbacks })
     instance.current = magazine
     return () => {
       magazine.dispose()
@@ -60,10 +60,10 @@ export const LeafThrough = forwardRef<LeafThroughHandle, LeafThroughProps>(funct
     }
   }, [])
 
-  // everything else is compared by value inside update(), so inline objects are fine
-  const { onPageChange: _a, onReady: _b, onError: _c, formatPageLabel: _d, ...data } = options
+  // Props are the whole state, so a prop that's removed goes back to its default.
+  // Everything is compared by value, so inline objects and arrays don't rebuild anything.
   useEffect(() => {
-    instance.current?.update(data)
+    instance.current?.setOptions({ ...options, ...callbacks })
   })
 
   useImperativeHandle(

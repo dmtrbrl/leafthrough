@@ -28,7 +28,9 @@ const BaseElement = (typeof HTMLElement !== 'undefined' ? HTMLElement : class {}
  * `options` property or the attributes `start-page`, `layout`, `spread-query`,
  * `page-aspect`, `loop`, `bleed`, `label` and `keyboard`.
  *
- * Events: `pagechange` (detail: PageChangeDetail), `ready`, `error`.
+ * Events (all bubble): `pagechange` (detail: PageChangeDetail), `ready`, and `pageerror`
+ * (detail: `{ error, page }`). It isn't called `error`, which on the DOM means a script
+ * error and reaches `window`, where error trackers listen.
  *
  * ```html
  * <leaf-through style="height: 80vh" layout="auto">
@@ -37,6 +39,12 @@ const BaseElement = (typeof HTMLElement !== 'undefined' ? HTMLElement : class {}
  * </leaf-through>
  * ```
  */
+export interface LeafThroughElementEventMap extends HTMLElementEventMap {
+  pagechange: CustomEvent<PageChangeDetail>
+  ready: CustomEvent<void>
+  pageerror: CustomEvent<{ error: unknown; page?: number }>
+}
+
 export class LeafThroughElement extends BaseElement {
   static observedAttributes = ['pages', ...Object.keys(ATTRIBUTES)]
 
@@ -106,6 +114,26 @@ export class LeafThroughElement extends BaseElement {
     this.magazine?.goTo(page, options)
   }
 
+  addEventListener<K extends keyof LeafThroughElementEventMap>(
+    type: K,
+    listener: (this: LeafThroughElement, event: LeafThroughElementEventMap[K]) => unknown,
+    options?: boolean | AddEventListenerOptions,
+  ): void
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
+    super.addEventListener(type, listener, options)
+  }
+
+  removeEventListener<K extends keyof LeafThroughElementEventMap>(
+    type: K,
+    listener: (this: LeafThroughElement, event: LeafThroughElementEventMap[K]) => unknown,
+    options?: boolean | EventListenerOptions,
+  ): void
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) {
+    super.removeEventListener(type, listener, options)
+  }
+
   connectedCallback() {
     this.childObserver = new MutationObserver(() => {
       if (!this.explicitPages) this.sync()
@@ -173,11 +201,11 @@ export class LeafThroughElement extends BaseElement {
       },
       onError: (error: unknown, page?: number) => {
         this.extra.onError?.(error, page)
-        this.dispatchEvent(new CustomEvent('error', { detail: { error, page }, bubbles: true, composed: true }))
+        this.dispatchEvent(new CustomEvent('pageerror', { detail: { error, page }, bubbles: true, composed: true }))
       },
     }
     if (!pages.length) return
-    if (this.magazine) this.magazine.update(options)
+    if (this.magazine) this.magazine.setOptions(options)
     else this.magazine = new LeafThrough(this.mount, options)
   }
 }

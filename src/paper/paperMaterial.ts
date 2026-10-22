@@ -3,6 +3,14 @@ import type { ResolvedSettings } from '../options.js'
 
 export type SheetUniforms = Record<string, THREE.IUniform>
 
+/** Uniforms every sheet in a scene shares. */
+export interface SheetShading {
+  /** Direction across of the turning sheet's root (x, z) and whether one is turning. */
+  spineContact: THREE.IUniform<THREE.Vector3>
+  /** Towards the sun, in the magazine's frame. */
+  lightDirection: THREE.IUniform<THREE.Vector3>
+}
+
 export interface SheetShader {
   /** GLSL defining `vec3 sheetPosition(vec2 uv, float noise)` and its uniforms. */
   vertexChunk: string
@@ -30,6 +38,7 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
     const float SHOW_THROUGH = ${glslFloat(paper.showThrough)};
     const float INK_GLOSS = ${glslFloat(paper.inkGloss)};
     const float SHADOW_OFFSET_X = ${glslFloat(shader.shadowOffsetX)};
+    const float CONTACT_REACH = 0.04;
   `
   const noiseAt = (component: string) => (shader.noise ? `aNoise.${component}` : '0.0')
 
@@ -42,7 +51,8 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
   material.onBeforeCompile = (program) => {
     Object.assign(program.uniforms, uniforms)
 
-    program.vertexShader = constants + shader.vertexChunk + 'varying vec2 vSheetUv;\n' + program.vertexShader
+    program.vertexShader =
+      constants + shader.vertexChunk + 'varying vec2 vSheetUv;\nvarying vec3 vSheetPosition;\n' + program.vertexShader
     program.vertexShader = program.vertexShader
       .replace(
         '#include <beginnormal_vertex>',
@@ -56,7 +66,8 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
       .replace(
         '#include <begin_vertex>',
         `vec3 transformed = sheetP;
-        vSheetUv = uv;`,
+        vSheetUv = uv;
+        vSheetPosition = sheetP;`,
       )
 
     program.fragmentShader =
@@ -64,7 +75,29 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
       `uniform sampler2D uFront;
       uniform sampler2D uBack;
       uniform sampler2D uPattern;
+      uniform vec3 uSpineContact;
+      uniform vec3 uLightDirection;
       varying vec2 vSheetUv;
+      varying vec3 vSheetPosition;
+
+      // Right where a turning sheet leaves the spine it all but touches the pages under it, and
+      // the shadow map's depth bias can't tell them apart: a thin strip next to the spine stays
+      // lit, which reads as a light seam. There the sheet is a plane through the spine
+      // (uSpineContact.xy is its direction across, z says whether a sheet is turning), so test
+      // the way to the light against that plane directly.
+      float sheetContactShadow(vec3 p, float intensity) {
+        if (uSpineContact.z < 0.5) return 1.0;
+        vec3 across = vec3(uSpineContact.x, 0.0, uSpineContact.y);
+        vec3 normal = vec3(-uSpineContact.y, 0.0, uSpineContact.x);
+        float facing = dot(normal, uLightDirection);
+        if (abs(facing) < 1e-4) return 1.0;
+        float t = -dot(normal, p) / facing;
+        if (t <= 1e-4) return 1.0;
+        vec3 hit = p + t * uLightDirection;
+        float along = dot(hit, across);
+        if (along <= 0.0 || along > CONTACT_REACH || abs(hit.y) > SHEET_ASPECT * 0.5) return 1.0;
+        return 1.0 - intensity;
+      }
       ` +
       program.fragmentShader
     program.fragmentShader = program.fragmentShader
@@ -88,6 +121,8 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
         diffuseColor *= sheetColor;
         float inkAmount = 1.0 - dot(faceColor.rgb, vec3(0.299, 0.587, 0.114));`,
       )
+      // directional shadows: whichever is darker of the shadow map and the contact test
+      .replace('#include <lights_fragment_begin>', withContactShadow(THREE.ShaderChunk.lights_fragment_begin))
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
@@ -120,6 +155,18 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
   return { material, depthMaterial }
 }
 
+const DIRECTIONAL_SHADOW =
+  'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )'
+
+// If a future three.js words this differently, sheets just go without the contact shadow.
+function withContactShadow(chunk: string) {
+  if (!chunk.includes(DIRECTIONAL_SHADOW)) return chunk
+  return chunk.replace(
+    DIRECTIONAL_SHADOW,
+    `min( ${DIRECTIONAL_SHADOW}, sheetContactShadow( vSheetPosition, directionalLightShadow.shadowIntensity ) )`,
+  )
+}
+
 export type SheetMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
 
 export function createSheetMesh(
@@ -135,6 +182,20 @@ export function createSheetMesh(
   mesh.receiveShadow = settings.lighting.shadows
   mesh.frustumCulled = false
   return mesh
+}
+
+/**
+ * Every sheet rises from the spine at height 0, so along the spine they all but touch and
+ * the depth buffer can't separate them: sheets further down flicker through as a light seam.
+ * Bias each sheet's depth by its place in the stack instead: the top sheet wins, and a sheet
+ * that's turning wins over everything.
+ */
+export function layerSheet(mesh: SheetMesh, depth: number, count: number, moving: boolean) {
+  const material = mesh.material
+  material.polygonOffset = true
+  material.polygonOffsetFactor = 0
+  material.polygonOffsetUnits = moving ? -(count + 4) : -(count - Math.min(depth, count))
+  mesh.renderOrder = depth
 }
 
 export function disposeSheetMesh(mesh: SheetMesh) {

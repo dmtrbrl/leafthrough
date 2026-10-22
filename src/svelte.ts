@@ -23,7 +23,7 @@ export function leafThrough(node: HTMLElement, options: LeafThroughActionOptions
   return {
     update(next: LeafThroughActionOptions) {
       const { onInit: _ignored, ...nextRest } = next
-      magazine.update(nextRest)
+      magazine.setOptions(nextRest)
     },
     destroy() {
       magazine.dispose()

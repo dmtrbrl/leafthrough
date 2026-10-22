@@ -1,5 +1,6 @@
 import type * as THREE from 'three'
 import type { ResolvedSettings } from './options.js'
+import type { SheetShading } from './paper/paperMaterial.js'
 
 export interface EngineContext {
   camera: THREE.PerspectiveCamera
@@ -16,6 +17,8 @@ export interface EngineContext {
   position: number
   /** Kept current by the controller as the magazine resizes. */
   metrics: EngineMetrics
+  /** Shared by every sheet; the engine keeps spineContact current. */
+  shading: SheetShading
 }
 
 export interface EngineMetrics {
@@ -28,6 +31,8 @@ export interface Engine {
   /** Spread: sheets turned to the left. Single: pages turned. */
   readonly position: number
   readonly maxPosition: number
+  /** Which part of the pages takes input: a closed spread only turns from its cover side. */
+  readonly activeSide: 'both' | 'right' | 'left'
   /** Advances the simulation; returns true when the frame needs drawing. */
   update(now: number): boolean
   /** Turns the top page one way; false when there's nothing to turn. */

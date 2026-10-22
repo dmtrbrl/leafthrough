@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Engine } from './engine.js'
-import { fit, framingFor, type Framing } from './framing.js'
+import { fit, framingFor, type Framing, type Rect } from './framing.js'
 import {
   DEFAULT_SPREAD_QUERY,
   defaultPageLabel,
@@ -72,6 +72,8 @@ export class LeafThrough extends EventTarget {
   private readonly abort = new AbortController()
   private readonly resizeObserver: ResizeObserver
   private readonly metrics = { dragWidth: 1 }
+  private hitBox: Rect | null = null
+  private hitSide: 'both' | 'right' | 'left' = 'both'
   private readonly intersection: IntersectionObserver
   private visible = true
   private needsRender = true
@@ -195,14 +197,27 @@ export class LeafThrough extends EventTarget {
     this.needsRender = true
   }
 
-  /** Changes options. Structural changes rebuild the scene and keep the current page. */
+  /** Changes some options and keeps the rest. Structural changes rebuild the scene and keep the current page. */
   update(options: Partial<LeafThroughOptions>) {
+    this.applyOptions({ ...this.options, ...options })
+  }
+
+  /**
+   * Replaces every option at once: anything left out goes back to its default. Bindings
+   * use this, since props describe the whole state. Structural changes rebuild the scene
+   * and keep the current page.
+   */
+  setOptions(options: LeafThroughOptions) {
+    this.applyOptions({ ...options })
+  }
+
+  private applyOptions(next: LeafThroughOptions) {
     if (this.disposed) return
     const previous = this.options
-    const next = { ...previous, ...options }
     this.options = next
 
-    const changed = (Object.keys(options) as (keyof LeafThroughOptions)[]).filter((key) => !deepEqual(previous[key], next[key]))
+    const keys = new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof LeafThroughOptions>
+    const changed = [...keys].filter((key) => !deepEqual(previous[key], next[key]))
     if (!changed.length) return
     if (changed.includes('label') || changed.includes('formatPageLabel')) this.applyLabel()
     if (changed.includes('spreadQuery')) this.watchSpreadQuery()
@@ -282,13 +297,14 @@ export class LeafThrough extends EventTarget {
     const settings = resolveSettings(this.options, layout, this.motionMedia.matches)
     const framing = framingFor(layout, settings.pageAspect)
     this.element.dataset.layout = layout
-    this.hitArea.style.inset = ''
     const { drag, click, hold } = settings.interaction
     this.hitArea.style.cursor = drag ? 'grab' : click || hold ? 'pointer' : 'default'
 
     const scene = new THREE.Scene()
     // the frustum is set up in layoutBox(), once we know which part of the view is visible
-    const camera = new THREE.PerspectiveCamera(40, 1, framing.distance * 0.05, framing.distance + 6)
+    // Clip planes hug what a page can reach (about a page width towards the camera, a little
+    // behind the floor): the tighter they are, the finer the depth buffer near the spine.
+    const camera = new THREE.PerspectiveCamera(40, 1, Math.max(0.1, framing.distance - 1.8), framing.distance + 2)
     camera.position.set(framing.eye.x, framing.eye.y, framing.distance)
     camera.lookAt(framing.eye.x, framing.eye.y, 0)
 
@@ -305,6 +321,10 @@ export class LeafThrough extends EventTarget {
     sun.shadow.camera.updateProjectionMatrix()
     sun.shadow.bias = -0.001
     scene.add(sun, sun.target)
+    const shading = {
+      spineContact: { value: new THREE.Vector3(1, 0, 0) },
+      lightDirection: { value: sun.position.clone().sub(sun.target.position).normalize() },
+    }
 
     let floor: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial> | null = null
     if (layout === 'spread' && shadows && settings.lighting.floorShadow > 0) {
@@ -332,6 +352,7 @@ export class LeafThrough extends EventTarget {
       pattern: this.patternFor(settings),
       position: this.pageToPosition(page, layout),
       metrics: this.metrics,
+      shading,
     }
     const engine: Engine = layout === 'spread' ? new SpreadEngine(ctx) : new SingleEngine(ctx)
     scene.add(engine.group)
@@ -411,12 +432,8 @@ export class LeafThrough extends EventTarget {
       width: px(canvas.width),
       height: px(canvas.height),
     })
-    Object.assign(this.hitArea.style, {
-      left: px(placed.box.x),
-      top: px(placed.box.y),
-      width: px(placed.box.width),
-      height: px(placed.box.height),
-    })
+    this.hitBox = placed.box
+    this.placeHitArea()
 
     const maxRatio = Math.min(devicePixelRatio, settings.maxPixelRatio)
     const budget = Math.sqrt(15e6 / Math.max(1, canvas.width * canvas.height))
@@ -580,11 +597,29 @@ export class LeafThrough extends EventTarget {
     if (run) this.needsRender = true
   }
 
+  // The hit area covers the pages; a closed magazine only takes input on its cover side.
+  // This is the only place that positions it.
+  private placeHitArea() {
+    const box = this.hitBox
+    const side = this.view?.engine.activeSide ?? 'both'
+    if (!box) return
+    this.hitSide = side
+    const half = side === 'both' ? 1 : 0.5
+    const px = (n: number) => `${Math.round(n * 100) / 100}px`
+    Object.assign(this.hitArea.style, {
+      left: px(side === 'right' ? box.x + box.width / 2 : box.x),
+      top: px(box.y),
+      width: px(box.width * half),
+      height: px(box.height),
+    })
+  }
+
   private frame(now: number) {
     const view = this.view
     if (!view) return
     this.stepRiffle(now, view.engine)
     const moved = view.engine.update(now)
+    if (view.engine.activeSide !== this.hitSide) this.placeHitArea()
     if (moved || this.needsRender) {
       this.renderer.shadowMap.needsUpdate = true
       this.renderer.render(view.scene, view.camera)

@@ -1,10 +1,11 @@
-# leafthrough
+# LeafThrough
 
 A 3D magazine you can flip through. Pages are printed paper: they bend, roll, catch the
 light and cast shadows. Built on three.js, written in TypeScript, with bindings for React,
 Vue, Svelte, and a Web Component for everything else (Angular, Solid, Lit, plain HTML).
 
-**[Live demo](https://dmtrbrl.github.io/leafthrough/)**, with one page per binding.
+**[Live demo](https://dmtrbrl.github.io/leafthrough/)**, with one page per binding and a dev panel
+for every option, method and event.
 
 - **Two layouts.** `spread` is an open magazine with sheets turning over the spine.
   `single` shows one page at a time, and read pages roll up behind the magazine. `auto`
@@ -117,7 +118,9 @@ comma-separated URLs), or through the `pages` property. Simple options are attri
 `start-page`, `layout`, `spread-query`, `page-aspect`, `loop`, `bleed`, `label` and
 `keyboard`. Everything else goes through the `options` property. The element has
 `next()`, `prev()`, `goTo()`, `page`, `pageCount` and `instance`. It fires `pagechange`,
-`ready` and `error` events, which bubble. To register it under another tag, call
+`ready` and `pageerror` (detail `{ error, page }`) events, which bubble. The last one isn't
+called `error`, because on the DOM that means a script error and reaches `window`, where
+error trackers listen. To register the element under another tag, call
 `defineLeafThrough('my-tag')`.
 
 **Angular**: import `leafthrough/element` once (for example in `main.ts`). Add
@@ -204,7 +207,8 @@ magazine.next()                         // false at the end
 magazine.prev()                         // false at the start
 magazine.goTo(12)                       // jump
 magazine.goTo(0, { animate: true })     // riffle back to the cover
-magazine.update({ layout: 'single' })   // change options and keep the page
+magazine.update({ layout: 'single' })   // change some options, keep the rest and the page
+magazine.setOptions({ pages })          // replace all options: anything left out goes back to its default
 magazine.dispose()                      // remove everything, free the GPU
 
 magazine.page          // first visible page, 0-based
@@ -218,10 +222,11 @@ magazine.addEventListener('ready', () => {})
 magazine.addEventListener('error', (e) => e.detail)       // { error, page }
 ```
 
-`update()` compares options by value. Changing callbacks or the label is free. Changing
-`pages`, `layout`, paper, lighting, motion or interaction rebuilds the scene (a few
-milliseconds) and keeps the reader on the same page. `startPage` only applies at creation;
-use `goTo()` after that.
+Both compare options by value. Changing callbacks or the label is free. Changing `pages`,
+`layout`, paper, lighting, motion or interaction rebuilds the scene (a few milliseconds)
+and keeps the reader on the same page. `startPage` only applies at creation; use `goTo()`
+after that. The React, Vue and Svelte bindings and the element use `setOptions()`, so
+removing a prop or attribute restores its default.
 
 ## Pages
 
@@ -245,7 +250,7 @@ off screen or the tab is hidden.
 
 ```bash
 npm install
-npm run dev          # demo playground: vanilla, React, Vue, Svelte and Web Component pages
+npm run dev          # demo playground: a page per binding, each with the dev panel
 npm run typecheck
 npm run build        # dist/: ESM bundles + type declarations
 npm run build:demo   # static demo site in dist-demo/ (published to GitHub Pages on every push to main)

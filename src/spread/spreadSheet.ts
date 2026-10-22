@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { ResolvedSettings } from '../options.js'
-import { createSheetMesh, type SheetMesh, type SheetUniforms } from '../paper/paperMaterial.js'
+import { createSheetMesh, type SheetMesh, type SheetShading, type SheetUniforms } from '../paper/paperMaterial.js'
 
 // A spread sheet is a 1 × pageAspect plane. Its flat coordinates come from the uv: x runs
 // from the spine (0) to the outer edge (1), y is centred on the spine's midpoint.
@@ -128,6 +128,8 @@ export interface SpreadSheetUniforms extends SheetUniforms {
   uFront: THREE.IUniform<THREE.Texture>
   uBack: THREE.IUniform<THREE.Texture>
   uPattern: THREE.IUniform<THREE.Texture>
+  uSpineContact: THREE.IUniform<THREE.Vector3>
+  uLightDirection: THREE.IUniform<THREE.Vector3>
 }
 
 export function createSpreadSheet(
@@ -136,6 +138,7 @@ export function createSpreadSheet(
   back: THREE.Texture,
   pattern: THREE.Texture,
   settings: ResolvedSettings,
+  shading: SheetShading,
 ): { mesh: SheetMesh; uniforms: SpreadSheetUniforms } {
   const uniforms: SpreadSheetUniforms = {
     uFlipProgress: { value: 0 },
@@ -149,6 +152,8 @@ export function createSpreadSheet(
     uFront: { value: front },
     uBack: { value: back },
     uPattern: { value: pattern },
+    uSpineContact: shading.spineContact,
+    uLightDirection: shading.lightDirection,
   }
   const mesh = createSheetMesh(
     geometry,

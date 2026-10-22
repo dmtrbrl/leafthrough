@@ -47,23 +47,19 @@ export const LeafThrough = defineComponent({
     const element = ref<HTMLDivElement>()
     const instance = shallowRef<Magazine | null>(null)
 
-    // drop props the parent didn't set, so the magazine's own defaults apply
-    const options = (): LeafThroughOptions => {
-      const out: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(props)) if (value !== undefined) out[key] = value
-      return out as unknown as LeafThroughOptions
+    const events = {
+      onPageChange: (detail: PageChangeDetail) => emit('pagechange', detail),
+      onReady: () => emit('ready'),
+      onError: (error: unknown, page?: number) => emit('error', error, page),
     }
+    // every prop, set or not: unset ones fall back to the magazine's defaults
+    const options = (): LeafThroughOptions => ({ ...(props as unknown as LeafThroughOptions), ...events })
 
     onMounted(() => {
-      instance.value = new Magazine(element.value!, {
-        ...options(),
-        onPageChange: (detail) => emit('pagechange', detail),
-        onReady: () => emit('ready'),
-        onError: (error, page) => emit('error', error, page),
-      })
+      instance.value = new Magazine(element.value!, options())
     })
-    // compared by value inside update(), so only real changes rebuild anything
-    watch(options, (next) => instance.value?.update(next), { deep: true })
+    // compared by value, so only real changes rebuild anything
+    watch(options, (next) => instance.value?.setOptions(next), { deep: true })
     onBeforeUnmount(() => {
       instance.value?.dispose()
       instance.value = null
