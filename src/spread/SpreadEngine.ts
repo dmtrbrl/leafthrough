@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Engine, EngineContext } from '../engine.js'
+import type { Engine, EngineContext, EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, type SheetMesh } from '../paper/paperMaterial.js'
 import { createSpreadGeometry, createSpreadSheet, type SpreadSheetUniforms } from './spreadSheet.js'
@@ -98,6 +98,7 @@ export class SpreadEngine implements Engine {
   private readonly camera: THREE.PerspectiveCamera
   private readonly canvas: HTMLCanvasElement
   private readonly hitArea: HTMLElement
+  private readonly metrics: EngineMetrics
   private readonly geometry: THREE.BufferGeometry
   private readonly sheets: Sheet[]
   private readonly abort = new AbortController()
@@ -118,6 +119,7 @@ export class SpreadEngine implements Engine {
   private readonly ndc = new THREE.Vector2()
   private readonly floor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
   private readonly hit = new THREE.Vector3()
+  private readonly spine = new THREE.Vector3()
 
   constructor(ctx: EngineContext) {
     this.settings = ctx.settings
@@ -125,6 +127,7 @@ export class SpreadEngine implements Engine {
     this.camera = ctx.camera
     this.canvas = ctx.canvas
     this.hitArea = ctx.hitArea
+    this.metrics = ctx.metrics
 
     const count = Math.ceil(ctx.textures.length / 2)
     this.maxPosition = count
@@ -202,7 +205,8 @@ export class SpreadEngine implements Engine {
   // which sheet a press at this x would pick up
   private sheetAt(clientX: number) {
     const rect = this.canvas.getBoundingClientRect()
-    const forward = clientX - rect.left >= rect.width / 2
+    const spineX = this.spine.set(0, 0, 0).project(this.camera).x
+    const forward = clientX >= rect.left + (0.5 * spineX + 0.5) * rect.width
     if (forward ? this.current >= this.sheets.length : this.current <= 0) return null
     return { index: forward ? this.current : this.current - 1, forward }
   }
@@ -350,7 +354,7 @@ export class SpreadEngine implements Engine {
           forward: target.forward,
           base: sheet.progress,
           progress: sheet.progress,
-          rectWidth: this.canvas.getBoundingClientRect().width,
+          rectWidth: this.metrics.dragWidth,
           targetCurve: { ...sheet.curveTarget },
           speed: 0,
         }

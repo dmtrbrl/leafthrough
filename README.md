@@ -131,11 +131,12 @@ The magazine fills the element you give it and keeps its proportions, centred.
 - **Fixed size.** Give the element a width and height, for example `height: 80vh`.
 - **Auto height.** If the element has no height of its own, the magazine takes its height
   from the width.
-- **Bleed.** By default the open spread fits its pages to the element. Lifted pages and
-  shadows then spill past it, as they would off a real table. Leave room around it and
-  don't clip it with `overflow: hidden`. To keep everything inside the element, set
-  `bleed: false`. The single layout already leaves room for its rolled pages, so its
-  default is `false`.
+- **Bleed.** By default the magazine fits the element, and turning pages and shadows spill
+  past it, as they would off a real table. In the single layout, a turning page swings
+  out to the left of the spine. The spill stops at the edges of the document, so it never
+  adds a horizontal scrollbar; on a phone the page sweeps off the screen edge. Don't clip
+  the element with `overflow: hidden`. To keep everything inside the element, set
+  `bleed: false`; the pages then come out smaller.
 
 ## Options
 
@@ -147,7 +148,7 @@ The magazine fills the element you give it and keeps its proportions, centred.
 | `spreadQuery` | `string` | `(min-width: 768px) and (orientation: landscape)` | When `auto` uses the spread layout. |
 | `pageAspect` | `number` | `1.377` | Page height ÷ width. |
 | `loop` | `boolean` | `true` | Single layout: after the last page, close and restart from the cover. |
-| `bleed` | `boolean` | spread `true`, single `false` | See [Sizing](#sizing). |
+| `bleed` | `boolean` | `true` | See [Sizing](#sizing). |
 | `paper` | `PaperOptions` | | See below. |
 | `lighting` | `LightingOptions` | | See below. |
 | `motion` | `MotionOptions` | | See below. |

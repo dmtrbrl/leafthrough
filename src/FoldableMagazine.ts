@@ -71,6 +71,7 @@ export class FoldableMagazine extends EventTarget {
   private readonly motionMedia: MediaQueryList
   private readonly abort = new AbortController()
   private readonly resizeObserver: ResizeObserver
+  private readonly metrics = { dragWidth: 1 }
   private readonly intersection: IntersectionObserver
   private visible = true
   private needsRender = true
@@ -135,6 +136,8 @@ export class FoldableMagazine extends EventTarget {
     )
     this.intersection.observe(element)
     document.addEventListener('visibilitychange', () => this.syncLoop(), { signal })
+    // the canvas is clipped to the document, which can move without the container resizing
+    window.addEventListener('resize', () => this.layoutBox(), { signal })
 
     this.canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), { signal })
     this.canvas.addEventListener('webglcontextrestored', () => (this.needsRender = true), { signal })
@@ -284,11 +287,10 @@ export class FoldableMagazine extends EventTarget {
     this.hitArea.style.cursor = drag ? 'grab' : click || hold ? 'pointer' : 'default'
 
     const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(framing.fov, framing.view.width / framing.view.height, framing.distance * 0.05, framing.distance + 6)
-    const cx = framing.view.x + framing.view.width / 2
-    const cy = framing.view.y + framing.view.height / 2
-    camera.position.set(cx, cy, framing.distance)
-    camera.lookAt(cx, cy, 0)
+    // the frustum is set up in layoutBox(), once we know which part of the view is visible
+    const camera = new THREE.PerspectiveCamera(40, 1, framing.distance * 0.05, framing.distance + 6)
+    camera.position.set(framing.eye.x, framing.eye.y, framing.distance)
+    camera.lookAt(framing.eye.x, framing.eye.y, 0)
 
     const { ambient, sun: sunOptions, shadows } = settings.lighting
     // the floor is the XY plane and +Z points at the viewer; the hemisphere keeps its
@@ -329,6 +331,7 @@ export class FoldableMagazine extends EventTarget {
       blank: layout === 'single' ? this.backBlank.texture : this.blank,
       pattern: this.patternFor(settings),
       position: this.pageToPosition(page, layout),
+      metrics: this.metrics,
     }
     const engine: Engine = layout === 'spread' ? new SpreadEngine(ctx) : new SingleEngine(ctx)
     scene.add(engine.group)
@@ -379,31 +382,66 @@ export class FoldableMagazine extends EventTarget {
   private layoutBox() {
     if (!this.view) return
     const { element } = this
+    const { framing, settings, camera } = this.view
     element.style.height = '100%'
     const width = element.clientWidth
     const height = element.clientHeight
     if (!width) return
-    const box = fit(this.view.framing, width, height, this.view.settings.bleed)
-    if (!height) element.style.height = `${Math.round(box.height)}px`
+    const placed = fit(framing, width, height, settings.bleed)
+    if (!height) element.style.height = `${Math.round(placed.height)}px`
+    this.metrics.dragWidth = framing.dragWidth * placed.scale
+
+    // A bleeding view can reach past the edges of the page; past the sides that would
+    // add a horizontal scrollbar, so the canvas stops at the document's edges and the
+    // camera renders just that part of the view.
+    const root = element.getBoundingClientRect()
+    const pageLeft = root.left + window.scrollX
+    const pageTop = root.top + window.scrollY
+    const documentWidth = document.documentElement.clientWidth
+    const left = Math.max(placed.view.x, -pageLeft)
+    const right = Math.min(placed.view.x + placed.view.width, documentWidth - pageLeft)
+    const top = Math.max(placed.view.y, -pageTop)
+    const bottom = placed.view.y + placed.view.height
+    const canvas = { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) }
 
     const px = (n: number) => `${Math.round(n * 100) / 100}px`
     Object.assign(this.canvas.style, {
-      left: px(box.canvas.x),
-      top: px(box.canvas.y),
-      width: px(box.canvas.width),
-      height: px(box.canvas.height),
+      left: px(canvas.x),
+      top: px(canvas.y),
+      width: px(canvas.width),
+      height: px(canvas.height),
     })
-    // the open spread takes input over the pages; one page at a time takes it over the
-    // whole view, so the strip left of the spine can turn back
-    const hit = this.view.settings.layout === 'spread' ? box.content : box.canvas
-    Object.assign(this.hitArea.style, { left: px(hit.x), top: px(hit.y), width: px(hit.width), height: px(hit.height) })
+    Object.assign(this.hitArea.style, {
+      left: px(placed.box.x),
+      top: px(placed.box.y),
+      width: px(placed.box.width),
+      height: px(placed.box.height),
+    })
 
-    const maxRatio = Math.min(devicePixelRatio, this.view.settings.maxPixelRatio)
-    const budget = Math.sqrt(15e6 / Math.max(1, box.canvas.width * box.canvas.height))
+    const maxRatio = Math.min(devicePixelRatio, settings.maxPixelRatio)
+    const budget = Math.sqrt(15e6 / Math.max(1, canvas.width * canvas.height))
     this.renderer.setPixelRatio(Math.min(maxRatio, budget))
-    this.renderer.setSize(Math.max(1, Math.round(box.canvas.width)), Math.max(1, Math.round(box.canvas.height)), false)
-    this.view.camera.aspect = box.canvas.width / box.canvas.height
-    this.view.camera.updateProjectionMatrix()
+    this.renderer.setSize(Math.max(1, Math.round(canvas.width)), Math.max(1, Math.round(canvas.height)), false)
+
+    // A frustum centred on the eye that covers the whole view, then cropped to the canvas.
+    const { eye, view, distance } = framing
+    const halfWidth = Math.max(eye.x - view.x, view.x + view.width - eye.x)
+    const halfHeight = Math.max(eye.y - view.y, view.y + view.height - eye.y)
+    const scale = placed.scale
+    camera.fov = (2 * Math.atan(halfHeight / distance) * 180) / Math.PI
+    camera.aspect = halfWidth / halfHeight
+    // where the frustum's top-left corner (eye.x - halfWidth, eye.y + halfHeight) lands, in px
+    const frustumLeft = placed.view.x + (eye.x - halfWidth - view.x) * scale
+    const frustumTop = placed.view.y + (view.y + view.height - (eye.y + halfHeight)) * scale
+    camera.setViewOffset(
+      2 * halfWidth * scale,
+      2 * halfHeight * scale,
+      canvas.x - frustumLeft,
+      canvas.y - frustumTop,
+      canvas.width,
+      canvas.height,
+    )
+    camera.updateProjectionMatrix()
     this.needsRender = true
   }
 

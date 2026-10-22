@@ -14,6 +14,13 @@ export interface EngineContext {
   pattern: THREE.Texture
   /** Where the magazine opens, in the engine's own position units. */
   position: number
+  /** Kept current by the controller as the magazine resizes. */
+  metrics: EngineMetrics
+}
+
+export interface EngineMetrics {
+  /** Pixels a drag spans per unit of `dragDistance`. */
+  dragWidth: number
 }
 
 export interface Engine {

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Engine, EngineContext } from '../engine.js'
+import type { Engine, EngineContext, EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, type SheetMesh } from '../paper/paperMaterial.js'
 import { createSingleGeometry, createSingleSheet, type SingleSheetUniforms } from './singleSheet.js'
@@ -118,6 +118,7 @@ export class SingleEngine implements Engine {
   private readonly camera: THREE.PerspectiveCamera
   private readonly canvas: HTMLCanvasElement
   private readonly hitArea: HTMLElement
+  private readonly metrics: EngineMetrics
   private readonly geometry: THREE.BufferGeometry
   private readonly sheets: Sheet[]
   private readonly count: number
@@ -147,6 +148,7 @@ export class SingleEngine implements Engine {
     this.camera = ctx.camera
     this.canvas = ctx.canvas
     this.hitArea = ctx.hitArea
+    this.metrics = ctx.metrics
     this.count = ctx.textures.length
     this.maxPosition = this.count
     this.current = clamp(Math.round(ctx.position), 0, Math.max(this.count - 1, 0)) // pages turned
@@ -380,7 +382,7 @@ export class SingleEngine implements Engine {
           forward: target.forward,
           base: sheet.progress,
           progress: sheet.progress,
-          rectWidth: this.canvas.getBoundingClientRect().width,
+          rectWidth: this.metrics.dragWidth,
           speed: 0,
         }
         this.cancelHold()

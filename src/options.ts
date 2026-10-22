@@ -109,9 +109,10 @@ export interface FoldableOptions {
   /** Single layout: after the last page, close and start again from the cover. Default `true`. */
   loop?: boolean
   /**
-   * `true` fits the pages to the container and lets lifted pages and shadows spill outside
-   * it (the container must not clip). `false` keeps everything inside the container.
-   * Default `true` for spread, `false` for single.
+   * `true` fits the magazine to the container and lets turning pages and shadows spill
+   * outside it, up to the edges of the document (the container must not clip).
+   * `false` keeps everything inside the container, which makes the pages smaller.
+   * Default `true`.
    */
   bleed?: boolean
   paper?: PaperOptions
@@ -170,7 +171,7 @@ export function resolveSettings(options: FoldableOptions, layout: Layout, prefer
     layout,
     pageAspect: options.pageAspect ?? DEFAULT_PAGE_ASPECT,
     loop: options.loop ?? true,
-    bleed: options.bleed ?? spread,
+    bleed: options.bleed ?? true,
     paper: {
       grain: paper.grain ?? true,
       grainScale: paper.grainScale ?? 1.46,
