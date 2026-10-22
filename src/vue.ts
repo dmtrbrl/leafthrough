@@ -1,7 +1,7 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch, type PropType } from 'vue'
-import { FoldableMagazine as Magazine, type GoToOptions } from './FoldableMagazine.js'
+import { LeafThrough as Magazine, type GoToOptions } from './LeafThrough.js'
 import type {
-  FoldableOptions,
+  LeafThroughOptions,
   InteractionOptions,
   LightingOptions,
   MotionOptions,
@@ -17,15 +17,15 @@ export type * from './options.js'
  * height from its width. Exposes `next()`, `prev()`, `goTo()` and `instance` via a template ref.
  *
  * ```vue
- * <FoldableMagazine :pages="pages" style="height: 80vh" @pagechange="(d) => (page = d.page)" />
+ * <LeafThrough :pages="pages" style="height: 80vh" @pagechange="(d) => (page = d.page)" />
  * ```
  */
-export const FoldableMagazine = defineComponent({
-  name: 'FoldableMagazine',
+export const LeafThrough = defineComponent({
+  name: 'LeafThrough',
   props: {
     pages: { type: Array as PropType<PageSource[]>, required: true },
     startPage: Number,
-    layout: String as PropType<FoldableOptions['layout']>,
+    layout: String as PropType<LeafThroughOptions['layout']>,
     spreadQuery: String,
     pageAspect: Number,
     loop: { type: Boolean, default: undefined },
@@ -36,7 +36,7 @@ export const FoldableMagazine = defineComponent({
     interaction: Object as PropType<InteractionOptions>,
     maxPixelRatio: Number,
     label: String,
-    formatPageLabel: Function as PropType<FoldableOptions['formatPageLabel']>,
+    formatPageLabel: Function as PropType<LeafThroughOptions['formatPageLabel']>,
   },
   emits: {
     pagechange: (_detail: PageChangeDetail) => true,
@@ -48,10 +48,10 @@ export const FoldableMagazine = defineComponent({
     const instance = shallowRef<Magazine | null>(null)
 
     // drop props the parent didn't set, so the magazine's own defaults apply
-    const options = (): FoldableOptions => {
+    const options = (): LeafThroughOptions => {
       const out: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(props)) if (value !== undefined) out[key] = value
-      return out as unknown as FoldableOptions
+      return out as unknown as LeafThroughOptions
     }
 
     onMounted(() => {
@@ -80,4 +80,4 @@ export const FoldableMagazine = defineComponent({
   },
 })
 
-export default FoldableMagazine
+export default LeafThrough

@@ -1,9 +1,9 @@
-export { FoldableMagazine, type FoldableEventMap, type GoToOptions } from './FoldableMagazine.js'
+export { LeafThrough, type LeafThroughEventMap, type GoToOptions } from './LeafThrough.js'
 export {
   DEFAULT_PAGE_ASPECT,
   DEFAULT_SPREAD_QUERY,
   defaultPageLabel,
-  type FoldableOptions,
+  type LeafThroughOptions,
   type InteractionOptions,
   type Layout,
   type LightingOptions,

@@ -5,7 +5,7 @@ import {
   DEFAULT_SPREAD_QUERY,
   defaultPageLabel,
   resolveSettings,
-  type FoldableOptions,
+  type LeafThroughOptions,
   type Layout,
   type PageChangeDetail,
   type ResolvedSettings,
@@ -16,7 +16,7 @@ import { SingleEngine } from './single/SingleEngine.js'
 import { SpreadEngine } from './spread/SpreadEngine.js'
 import { loadGrain, PageLoader } from './textures.js'
 
-export interface FoldableEventMap {
+export interface LeafThroughEventMap {
   pagechange: CustomEvent<PageChangeDetail>
   ready: CustomEvent<void>
   error: CustomEvent<{ error: unknown; page?: number }>
@@ -28,7 +28,7 @@ export interface GoToOptions {
 }
 
 // options that only need storing, not a rebuild
-const LIVE_KEYS = new Set<keyof FoldableOptions>(['onPageChange', 'onReady', 'onError', 'formatPageLabel', 'label', 'startPage'])
+const LIVE_KEYS = new Set<keyof LeafThroughOptions>(['onPageChange', 'onReady', 'onError', 'formatPageLabel', 'label', 'startPage'])
 
 const isClient = typeof window !== 'undefined'
 
@@ -37,18 +37,18 @@ const isClient = typeof window !== 'undefined'
  * fits inside it (a container without a height takes its height from its width).
  *
  * ```ts
- * const magazine = new FoldableMagazine(document.querySelector('#magazine'), {
+ * const magazine = new LeafThrough(document.querySelector('#magazine'), {
  *   pages: ['/pages/01.jpg', '/pages/02.jpg', '/pages/03.jpg'],
  * })
  * magazine.addEventListener('pagechange', (e) => console.log(e.detail.page))
  * ```
  */
-export class FoldableMagazine extends EventTarget {
+export class LeafThrough extends EventTarget {
   readonly container: HTMLElement
-  /** The element the magazine renders into; focusable, labelled, and styleable via `[data-foldable]`. */
+  /** The element the magazine renders into; focusable, labelled, and styleable via `[data-leafthrough]`. */
   readonly element: HTMLDivElement
 
-  private options: FoldableOptions
+  private options: LeafThroughOptions
   private readonly canvas: HTMLCanvasElement
   private readonly hitArea: HTMLDivElement
   private readonly live: HTMLDivElement
@@ -82,14 +82,14 @@ export class FoldableMagazine extends EventTarget {
   private ready = false
   private disposed = false
 
-  constructor(container: HTMLElement, options: FoldableOptions) {
+  constructor(container: HTMLElement, options: LeafThroughOptions) {
     super()
-    if (!isClient) throw new Error('FoldableMagazine needs a browser; create it on the client.')
+    if (!isClient) throw new Error('LeafThrough needs a browser; create it on the client.')
     this.container = container
     this.options = { ...options }
 
     const element = (this.element = document.createElement('div'))
-    element.dataset.foldable = ''
+    element.dataset.leafthrough = ''
     element.dataset.state = 'loading'
     element.tabIndex = 0
     element.setAttribute('role', 'region')
@@ -100,7 +100,7 @@ export class FoldableMagazine extends EventTarget {
     this.canvas.style.cssText = 'position:absolute;display:block;pointer-events:none;opacity:0;transition:opacity .4s'
     this.canvas.setAttribute('aria-hidden', 'true')
     this.hitArea = document.createElement('div')
-    this.hitArea.dataset.foldableHitArea = ''
+    this.hitArea.dataset.leafthroughHitArea = ''
     this.hitArea.style.cssText = 'position:absolute;cursor:grab;touch-action:pan-y pinch-zoom'
     this.live = document.createElement('div')
     this.live.setAttribute('aria-live', 'polite')
@@ -196,13 +196,13 @@ export class FoldableMagazine extends EventTarget {
   }
 
   /** Changes options. Structural changes rebuild the scene and keep the current page. */
-  update(options: Partial<FoldableOptions>) {
+  update(options: Partial<LeafThroughOptions>) {
     if (this.disposed) return
     const previous = this.options
     const next = { ...previous, ...options }
     this.options = next
 
-    const changed = (Object.keys(options) as (keyof FoldableOptions)[]).filter((key) => !deepEqual(previous[key], next[key]))
+    const changed = (Object.keys(options) as (keyof LeafThroughOptions)[]).filter((key) => !deepEqual(previous[key], next[key]))
     if (!changed.length) return
     if (changed.includes('label') || changed.includes('formatPageLabel')) this.applyLabel()
     if (changed.includes('spreadQuery')) this.watchSpreadQuery()
@@ -216,9 +216,9 @@ export class FoldableMagazine extends EventTarget {
     if (rebuild) this.remount(page)
   }
 
-  addEventListener<K extends keyof FoldableEventMap>(
+  addEventListener<K extends keyof LeafThroughEventMap>(
     type: K,
-    listener: (event: FoldableEventMap[K]) => void,
+    listener: (event: LeafThroughEventMap[K]) => void,
     options?: boolean | AddEventListenerOptions,
   ): void
   addEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions): void
@@ -226,9 +226,9 @@ export class FoldableMagazine extends EventTarget {
     super.addEventListener(type, listener, options)
   }
 
-  removeEventListener<K extends keyof FoldableEventMap>(
+  removeEventListener<K extends keyof LeafThroughEventMap>(
     type: K,
-    listener: (event: FoldableEventMap[K]) => void,
+    listener: (event: LeafThroughEventMap[K]) => void,
     options?: boolean | EventListenerOptions,
   ): void
   removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions): void
@@ -447,7 +447,7 @@ export class FoldableMagazine extends EventTarget {
 
   // --- pages ---------------------------------------------------------------------
 
-  private pagesKey(options: FoldableOptions) {
+  private pagesKey(options: LeafThroughOptions) {
     return options.pages.map((p) => (typeof p === 'string' ? p : `#${objectId(p)}`)).join('\n')
   }
 
@@ -477,7 +477,7 @@ export class FoldableMagazine extends EventTarget {
 
   private fail(error: unknown, page?: number) {
     if (this.options.onError) this.options.onError(error, page)
-    else console.warn('[foldable-magazine]', error)
+    else console.warn('[leafthrough]', error)
     this.dispatchEvent(new CustomEvent('error', { detail: { error, page } }))
   }
 

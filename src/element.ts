@@ -1,5 +1,5 @@
-import { FoldableMagazine, type GoToOptions } from './FoldableMagazine.js'
-import type { FoldableOptions, Layout, PageChangeDetail, PageSource } from './options.js'
+import { LeafThrough, type GoToOptions } from './LeafThrough.js'
+import type { LeafThroughOptions, Layout, PageChangeDetail, PageSource } from './options.js'
 
 export type * from './options.js'
 
@@ -21,7 +21,7 @@ const BOOLEANS = new Set(['loop', 'bleed'])
 const BaseElement = (typeof HTMLElement !== 'undefined' ? HTMLElement : class {}) as typeof HTMLElement
 
 /**
- * `<foldable-magazine>`: works anywhere HTML does, including Angular, Solid and Lit.
+ * `<leaf-through>`: works anywhere HTML does, including Angular, Solid and Lit.
  *
  * Pages come from the `pages` property, a `pages` attribute (JSON array or comma-separated
  * URLs), or the element's `<img>` children. Everything else can be set through the
@@ -31,17 +31,17 @@ const BaseElement = (typeof HTMLElement !== 'undefined' ? HTMLElement : class {}
  * Events: `pagechange` (detail: PageChangeDetail), `ready`, `error`.
  *
  * ```html
- * <foldable-magazine style="height: 80vh" layout="auto">
+ * <leaf-through style="height: 80vh" layout="auto">
  *   <img src="/pages/01.jpg" alt="Cover" />
  *   <img src="/pages/02.jpg" alt="" />
- * </foldable-magazine>
+ * </leaf-through>
  * ```
  */
-export class FoldableMagazineElement extends BaseElement {
+export class LeafThroughElement extends BaseElement {
   static observedAttributes = ['pages', ...Object.keys(ATTRIBUTES)]
 
-  private magazine: FoldableMagazine | null = null
-  private extra: Partial<FoldableOptions> = {}
+  private magazine: LeafThrough | null = null
+  private extra: Partial<LeafThroughOptions> = {}
   private explicitPages: PageSource[] | null = null
   private readonly mount: HTMLDivElement
   private childObserver: MutationObserver | null = null
@@ -67,11 +67,11 @@ export class FoldableMagazineElement extends BaseElement {
   }
 
   /** Any other options, merged over the attributes. */
-  get options(): Partial<FoldableOptions> {
+  get options(): Partial<LeafThroughOptions> {
     return this.extra
   }
 
-  set options(options: Partial<FoldableOptions>) {
+  set options(options: Partial<LeafThroughOptions>) {
     this.extra = { ...options }
     if (options.pages) this.explicitPages = options.pages
     this.sync()
@@ -90,7 +90,7 @@ export class FoldableMagazineElement extends BaseElement {
   }
 
   /** The underlying instance, once connected. */
-  get instance(): FoldableMagazine | null {
+  get instance(): LeafThrough | null {
     return this.magazine
   }
 
@@ -140,7 +140,7 @@ export class FoldableMagazineElement extends BaseElement {
     return Array.from(this.querySelectorAll('img'), (img) => img.currentSrc || img.src).filter(Boolean)
   }
 
-  private optionsFromAttributes(): Partial<FoldableOptions> {
+  private optionsFromAttributes(): Partial<LeafThroughOptions> {
     const out: Record<string, unknown> = {}
     for (const [attribute, key] of Object.entries(ATTRIBUTES)) {
       const value = this.getAttribute(attribute)
@@ -151,14 +151,14 @@ export class FoldableMagazineElement extends BaseElement {
         out.interaction = { keyboard: value === 'global' ? 'global' : value !== 'false' }
       } else out[key] = value
     }
-    return out as Partial<FoldableOptions>
+    return out as Partial<LeafThroughOptions>
   }
 
   private sync() {
     if (!this.isConnected) return
     const pages = this.pages
     const attributes = this.optionsFromAttributes()
-    const options: FoldableOptions = {
+    const options: LeafThroughOptions = {
       ...attributes,
       ...this.extra,
       interaction: { ...attributes.interaction, ...this.extra.interaction },
@@ -178,20 +178,20 @@ export class FoldableMagazineElement extends BaseElement {
     }
     if (!pages.length) return
     if (this.magazine) this.magazine.update(options)
-    else this.magazine = new FoldableMagazine(this.mount, options)
+    else this.magazine = new LeafThrough(this.mount, options)
   }
 }
 
-/** Registers the element (as `foldable-magazine` unless you pick another tag). */
-export function defineFoldableMagazine(tagName = 'foldable-magazine') {
+/** Registers the element (as `leaf-through` unless you pick another tag). */
+export function defineLeafThrough(tagName = 'leaf-through') {
   if (typeof customElements === 'undefined' || customElements.get(tagName)) return
-  customElements.define(tagName, class extends FoldableMagazineElement {})
+  customElements.define(tagName, class extends LeafThroughElement {})
 }
 
-defineFoldableMagazine()
+defineLeafThrough()
 
 declare global {
   interface HTMLElementTagNameMap {
-    'foldable-magazine': FoldableMagazineElement
+    'leaf-through': LeafThroughElement
   }
 }

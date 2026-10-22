@@ -1,4 +1,4 @@
-import { FoldableMagazine, type FoldableOptions } from 'foldable-magazine'
+import { LeafThrough, type LeafThroughOptions } from 'leafthrough'
 import { generatePages } from './pages'
 import './style.css'
 
@@ -22,7 +22,7 @@ document.querySelector('#app')!.innerHTML = `
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
 const status = $('status')
 
-const magazine = new FoldableMagazine($('magazine'), {
+const magazine = new LeafThrough($('magazine'), {
   pages: generatePages(),
   startPage: 14,
   label: 'Foldable, issue 01',
@@ -37,7 +37,7 @@ $('prev').onclick = () => magazine.prev()
 $('next').onclick = () => magazine.next()
 $('cover').onclick = () => magazine.goTo(0, { animate: true })
 $<HTMLSelectElement>('layout').onchange = (e) =>
-  magazine.update({ layout: (e.target as HTMLSelectElement).value as FoldableOptions['layout'] })
+  magazine.update({ layout: (e.target as HTMLSelectElement).value as LeafThroughOptions['layout'] })
 $<HTMLInputElement>('grain').onchange = (e) => magazine.update({ paper: { grain: (e.target as HTMLInputElement).checked } })
 $<HTMLSelectElement>('speed').onchange = (e) =>
   magazine.update({ motion: { speed: Number((e.target as HTMLSelectElement).value) } })

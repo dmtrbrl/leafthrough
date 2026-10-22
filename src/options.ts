@@ -95,7 +95,7 @@ export interface PageChangeDetail {
   layout: Layout
 }
 
-export interface FoldableOptions {
+export interface LeafThroughOptions {
   /** The pages in reading order, front cover first. */
   pages: PageSource[]
   /** Page to open at, 0-based. Default `0`. Later changes are ignored; use `goTo()`. */
@@ -159,7 +159,7 @@ export interface ResolvedSettings {
   maxPixelRatio: number
 }
 
-export function resolveSettings(options: FoldableOptions, layout: Layout, prefersReducedMotion: boolean): ResolvedSettings {
+export function resolveSettings(options: LeafThroughOptions, layout: Layout, prefersReducedMotion: boolean): ResolvedSettings {
   const spread = layout === 'spread'
   const paper = options.paper ?? {}
   const lighting = options.lighting ?? {}

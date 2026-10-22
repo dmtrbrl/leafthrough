@@ -1,5 +1,5 @@
-import 'foldable-magazine/element'
-import type { FoldableMagazineElement } from 'foldable-magazine/element'
+import 'leafthrough/element'
+import type { LeafThroughElement } from 'leafthrough/element'
 import { generatePages } from './pages'
 import './style.css'
 
@@ -7,7 +7,7 @@ import './style.css'
 // list of <img> children or a `pages` attribute with URLs works too).
 document.querySelector('#app')!.innerHTML = `
   <main>
-    <foldable-magazine class="magazine" start-page="14" keyboard="global" label="Foldable, issue 01"></foldable-magazine>
+    <leaf-through class="magazine" start-page="14" keyboard="global" label="Foldable, issue 01"></leaf-through>
   </main>
   <footer>
     <div class="controls">
@@ -21,7 +21,7 @@ document.querySelector('#app')!.innerHTML = `
   </footer>
 `
 
-const magazine = document.querySelector('foldable-magazine') as FoldableMagazineElement
+const magazine = document.querySelector('leaf-through') as LeafThroughElement
 const status = document.getElementById('status')!
 magazine.pages = generatePages()
 magazine.addEventListener('pagechange', (e) => {

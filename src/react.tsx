@@ -1,17 +1,17 @@
 'use client'
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, type CSSProperties } from 'react'
-import { FoldableMagazine as Magazine, type GoToOptions } from './FoldableMagazine.js'
-import { defaultPageLabel, type FoldableOptions, type PageChangeDetail } from './options.js'
+import { LeafThrough as Magazine, type GoToOptions } from './LeafThrough.js'
+import { defaultPageLabel, type LeafThroughOptions, type PageChangeDetail } from './options.js'
 
 export type * from './options.js'
 
-export interface FoldableMagazineProps extends FoldableOptions {
+export interface LeafThroughProps extends LeafThroughOptions {
   className?: string
   style?: CSSProperties
 }
 
-export interface FoldableMagazineHandle {
+export interface LeafThroughHandle {
   next(): boolean
   prev(): boolean
   goTo(page: number, options?: GoToOptions): void
@@ -26,11 +26,11 @@ export interface FoldableMagazineHandle {
  * it takes its height from its width.
  *
  * ```tsx
- * const ref = useRef<FoldableMagazineHandle>(null)
- * <FoldableMagazine ref={ref} pages={pages} style={{ height: '80vh' }} onPageChange={(d) => setPage(d.page)} />
+ * const ref = useRef<LeafThroughHandle>(null)
+ * <LeafThrough ref={ref} pages={pages} style={{ height: '80vh' }} onPageChange={(d) => setPage(d.page)} />
  * ```
  */
-export const FoldableMagazine = forwardRef<FoldableMagazineHandle, FoldableMagazineProps>(function FoldableMagazine(
+export const LeafThrough = forwardRef<LeafThroughHandle, LeafThroughProps>(function LeafThrough(
   { className, style, ...options },
   ref,
 ) {
@@ -48,7 +48,7 @@ export const FoldableMagazine = forwardRef<FoldableMagazineHandle, FoldableMagaz
       onError: (error: unknown, page?: number) => {
         const handler = latest.current.onError
         if (handler) handler(error, page)
-        else console.warn('[foldable-magazine]', error)
+        else console.warn('[leafthrough]', error)
       },
       formatPageLabel: (detail: PageChangeDetail) =>
         latest.current.formatPageLabel?.(detail) ?? defaultPageLabel(detail),

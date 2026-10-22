@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { foldable, type FoldableMagazine, type Layout } from 'foldable-magazine/svelte'
+  import { leafThrough, type LeafThrough, type Layout } from 'leafthrough/svelte'
   import { generatePages } from './pages'
 
   const pages = generatePages()
-  let magazine: FoldableMagazine | undefined
+  let magazine: LeafThrough | undefined
   let visible = $state<number[]>([13, 14])
   let layout = $state<'auto' | Layout>('auto')
   let grain = $state(true)
@@ -12,7 +12,7 @@
 <main>
   <div
     class="magazine"
-    use:foldable={{
+    use:leafThrough={{
       pages,
       startPage: 14,
       layout,

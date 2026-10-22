@@ -2,16 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "foldable",
+      "name": "leafthrough",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5179", "--strictPort"],
       "port": 5179
     },
     {
-      "name": "foldable-dist",
+      "name": "leafthrough-dist",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5180", "--strictPort"],
-      "env": { "FOLDABLE_DIST": "1" },
+      "env": { "LEAFTHROUGH_DIST": "1" },
       "port": 5180
     }
   ]

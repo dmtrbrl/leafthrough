@@ -21,19 +21,19 @@
     ],
     "noEmit": true,
     "paths": {
-      "foldable-magazine": [
+      "leafthrough": [
         "./src/index.ts"
       ],
-      "foldable-magazine/element": [
+      "leafthrough/element": [
         "./src/element.ts"
       ],
-      "foldable-magazine/react": [
+      "leafthrough/react": [
         "./src/react.tsx"
       ],
-      "foldable-magazine/vue": [
+      "leafthrough/vue": [
         "./src/vue.ts"
       ],
-      "foldable-magazine/svelte": [
+      "leafthrough/svelte": [
         "./src/svelte.ts"
       ]
     }

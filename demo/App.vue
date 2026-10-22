@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, shallowRef } from 'vue'
-import { FoldableMagazine, type Layout, type PageChangeDetail } from 'foldable-magazine/vue'
+import { LeafThrough, type Layout, type PageChangeDetail } from 'leafthrough/vue'
 import { generatePages } from './pages'
 
 const pages = shallowRef(generatePages())
-const magazine = ref<InstanceType<typeof FoldableMagazine> & { next(): boolean; prev(): boolean; goTo(page: number, o?: { animate?: boolean }): void }>()
+const magazine = ref<InstanceType<typeof LeafThrough> & { next(): boolean; prev(): boolean; goTo(page: number, o?: { animate?: boolean }): void }>()
 const visible = ref<number[]>([13, 14])
 const layout = ref<'auto' | Layout>('auto')
 const grain = ref(true)
@@ -14,7 +14,7 @@ const onPageChange = (detail: PageChangeDetail) => (visible.value = detail.visib
 
 <template>
   <main>
-    <FoldableMagazine
+    <LeafThrough
       ref="magazine"
       class="magazine"
       :pages="pages"

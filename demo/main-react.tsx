@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { FoldableMagazine, type FoldableMagazineHandle, type Layout } from 'foldable-magazine/react'
+import { LeafThrough, type LeafThroughHandle, type Layout } from 'leafthrough/react'
 import { generatePages } from './pages'
 import './style.css'
 
 function App() {
   const pages = useMemo(() => generatePages(), [])
-  const magazine = useRef<FoldableMagazineHandle>(null)
+  const magazine = useRef<LeafThroughHandle>(null)
   const [visible, setVisible] = useState<number[]>([13, 14])
   const [layout, setLayout] = useState<'auto' | Layout>('auto')
   const [grain, setGrain] = useState(true)
@@ -14,7 +14,7 @@ function App() {
   return (
     <>
       <main>
-        <FoldableMagazine
+        <LeafThrough
           ref={magazine}
           className="magazine"
           pages={pages}

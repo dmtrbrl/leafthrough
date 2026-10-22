@@ -1,4 +1,4 @@
-# foldable-magazine
+# leafthrough
 
 A 3D magazine you can flip through. Pages are printed paper: they bend, roll, catch the
 light and cast shadows. Built on three.js, written in TypeScript, with bindings for React,
@@ -19,7 +19,7 @@ Vue, Svelte, and a Web Component for everything else (Angular, Solid, Lit, plain
 ## Install
 
 ```bash
-npm install foldable-magazine three
+npm install leafthrough three
 ```
 
 `three` (r160 or newer) is a peer dependency. React, Vue and Svelte are optional peers;
@@ -33,9 +33,9 @@ Every binding renders into an element you size with CSS. The magazine fits itsel
 ### Vanilla
 
 ```ts
-import { FoldableMagazine } from 'foldable-magazine'
+import { LeafThrough } from 'leafthrough'
 
-const magazine = new FoldableMagazine(document.querySelector('#magazine')!, {
+const magazine = new LeafThrough(document.querySelector('#magazine')!, {
   pages: ['/pages/01.jpg', '/pages/02.jpg', '/pages/03.jpg', '/pages/04.jpg'],
 })
 
@@ -47,13 +47,13 @@ document.querySelector('#next')!.addEventListener('click', () => magazine.next()
 
 ```tsx
 import { useRef } from 'react'
-import { FoldableMagazine, type FoldableMagazineHandle } from 'foldable-magazine/react'
+import { LeafThrough, type LeafThroughHandle } from 'leafthrough/react'
 
 export function Issue({ pages }: { pages: string[] }) {
-  const magazine = useRef<FoldableMagazineHandle>(null)
+  const magazine = useRef<LeafThroughHandle>(null)
   return (
     <>
-      <FoldableMagazine ref={magazine} pages={pages} style={{ height: '80vh' }} onPageChange={(d) => console.log(d.page)} />
+      <LeafThrough ref={magazine} pages={pages} style={{ height: '80vh' }} onPageChange={(d) => console.log(d.page)} />
       <button onClick={() => magazine.current?.next()}>Next</button>
     </>
   )
@@ -69,14 +69,14 @@ Next.js and other SSR setups. Props are compared by value, so inline objects suc
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { FoldableMagazine } from 'foldable-magazine/vue'
+import { LeafThrough } from 'leafthrough/vue'
 
 const magazine = ref()
 const pages = ['/pages/01.jpg', '/pages/02.jpg', '/pages/03.jpg']
 </script>
 
 <template>
-  <FoldableMagazine ref="magazine" :pages="pages" style="height: 80vh" @pagechange="(d) => console.log(d.page)" />
+  <LeafThrough ref="magazine" :pages="pages" style="height: 80vh" @pagechange="(d) => console.log(d.page)" />
   <button @click="magazine.next()">Next</button>
 </template>
 ```
@@ -88,26 +88,26 @@ The template ref exposes `next()`, `prev()`, `goTo()` and `instance`. Events are
 
 ```svelte
 <script lang="ts">
-  import { foldable, type FoldableMagazine } from 'foldable-magazine/svelte'
+  import { leafThrough, type LeafThrough } from 'leafthrough/svelte'
 
   const pages = ['/pages/01.jpg', '/pages/02.jpg', '/pages/03.jpg']
-  let magazine: FoldableMagazine
+  let magazine: LeafThrough
 </script>
 
-<div style="height: 80vh" use:foldable={{ pages, onInit: (m) => (magazine = m) }}></div>
+<div style="height: 80vh" use:leafThrough={{ pages, onInit: (m) => (magazine = m) }}></div>
 <button onclick={() => magazine.next()}>Next</button>
 ```
 
 ### Web Component (Angular, Solid, Lit, plain HTML)
 
 ```html
-<script type="module">import 'foldable-magazine/element'</script>
+<script type="module">import 'leafthrough/element'</script>
 
-<foldable-magazine style="height: 80vh" layout="auto" start-page="0" label="Spring issue">
+<leaf-through style="height: 80vh" layout="auto" start-page="0" label="Spring issue">
   <img src="/pages/01.jpg" alt="Cover" />
   <img src="/pages/02.jpg" alt="" />
   <img src="/pages/03.jpg" alt="" />
-</foldable-magazine>
+</leaf-through>
 ```
 
 You can give pages as `<img>` children, as a `pages` attribute (a JSON array or
@@ -116,13 +116,13 @@ comma-separated URLs), or through the `pages` property. Simple options are attri
 `keyboard`. Everything else goes through the `options` property. The element has
 `next()`, `prev()`, `goTo()`, `page`, `pageCount` and `instance`. It fires `pagechange`,
 `ready` and `error` events, which bubble. To register it under another tag, call
-`defineFoldableMagazine('my-tag')`.
+`defineLeafThrough('my-tag')`.
 
-**Angular**: import `foldable-magazine/element` once (for example in `main.ts`). Add
+**Angular**: import `leafthrough/element` once (for example in `main.ts`). Add
 `CUSTOM_ELEMENTS_SCHEMA` to the component, then bind with
 `[pages]="pages" (pagechange)="onPage($event.detail)"`.
 
-**Solid**: `<foldable-magazine prop:pages={pages()} on:pagechange={(e) => setPage(e.detail.page)} />`.
+**Solid**: `<leaf-through prop:pages={pages()} on:pagechange={(e) => setPage(e.detail.page)} />`.
 
 ## Sizing
 
@@ -209,7 +209,7 @@ magazine.page          // first visible page, 0-based
 magazine.visiblePages  // e.g. [13, 14]
 magazine.pageCount
 magazine.layout        // 'spread' | 'single'
-magazine.element       // the focusable root, [data-foldable][data-layout][data-state]
+magazine.element       // the focusable root, [data-leafthrough][data-layout][data-state]
 
 magazine.addEventListener('pagechange', (e) => e.detail)  // { page, visiblePages, pageCount, layout }
 magazine.addEventListener('ready', () => {})
@@ -247,7 +247,7 @@ npm run dev          # demo playground: vanilla, React, Vue, Svelte and Web Comp
 npm run typecheck
 npm run build        # dist/: ESM bundles + type declarations
 npm run build:demo   # static demo site in dist-demo/
-FOLDABLE_DIST=1 npx vite   # run the demo against the built dist/ instead of src/
+LEAFTHROUGH_DIST=1 npx vite   # run the demo against the built dist/ instead of src/
 ```
 
 How it works:
@@ -255,7 +255,7 @@ How it works:
 - `src/spread` and `src/single` hold each layout's engine (simulation and input) and its
   sheet shader.
 - `src/paper` holds the shared paper material and the procedural grain.
-- `FoldableMagazine.ts` handles the DOM, sizing, loading, layout switching, keyboard and
+- `LeafThrough.ts` handles the DOM, sizing, loading, layout switching, keyboard and
   events.
 
 ## Credits
