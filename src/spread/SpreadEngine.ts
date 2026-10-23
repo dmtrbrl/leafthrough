@@ -162,6 +162,10 @@ export class SpreadEngine implements Engine {
     return this.current
   }
 
+  get turning() {
+    return this.flights.length > 0 || this.drag !== null
+  }
+
   // closed, only the cover side can be grabbed
   get activeSide() {
     const busy = this.flights.length > 0 || this.drag !== null || this.hold !== null

@@ -200,6 +200,10 @@ export class SingleEngine implements Engine {
     return this.current
   }
 
+  get turning() {
+    return this.flights.length > 0 || this.drag !== null
+  }
+
   readonly activeSide = 'both'
 
   setPageTexture(page: number, texture: THREE.Texture) {

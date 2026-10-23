@@ -227,6 +227,7 @@ magazine.visiblePages  // e.g. [13, 14]
 magazine.pageCount
 magazine.layout        // 'spread' | 'single'
 magazine.plain         // true while showing flat pages (by choice, or without WebGL)
+magazine.turning       // true while a page is dragged or still finishing its turn
 magazine.element       // the focusable root, [data-leafthrough][data-layout][data-state][data-plain]
 
 magazine.addEventListener('pagechange', (e) => e.detail)  // { page, visiblePages, pageCount, layout }

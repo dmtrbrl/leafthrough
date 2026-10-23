@@ -1,5 +1,6 @@
 import type { Layout, LeafThroughOptions, PageChangeDetail, PageSource } from 'leafthrough'
 import { DEFAULT_SPREAD_QUERY, resolveSettings } from '../src/options'
+import { currentExample } from './examples'
 import { demoPages } from './pages'
 
 // The dev panel: every option, method and property of the magazine, shared by all the
@@ -15,6 +16,7 @@ export interface MagazineHandle {
   readonly visiblePages: number[]
   readonly pageCount: number
   readonly layout: Layout | undefined
+  readonly turning: boolean
 }
 
 export interface PanelHost {
@@ -170,11 +172,11 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
 
   const sections: { title: string; open?: boolean; controls: Control[] }[] = [
     {
-      title: 'Pages',
+      title: 'Content',
       open: true,
       controls: [
         {
-          label: 'pages (count)',
+          label: 'Page count',
           kind: 'select',
           choices: [['12 (magazine)', 12], ['28 (repeat)', 28], ['7 (odd)', 7], ['2', 2]],
           read: () => state.pageCount,
@@ -182,17 +184,17 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
           fallback: () => demoPages.length,
         },
         {
-          label: 'pages (source)',
-          hint: 'Magazine image URLs, or URLs with page 3 missing (tests onError)',
+          label: 'Page artwork',
+          hint: 'Use the bundled artwork or a missing image to preview error handling.',
           kind: 'select',
           choices: [['image URLs', 'urls'], ['URLs, one broken', 'broken']],
           read: () => state.source,
           write: (v) => (state.source = v as Source | undefined),
           fallback: () => 'urls',
         },
-        option('startPage', 'startPage', 'range', { ...range(0, 27, 1), hint: 'Applies on Remount', defaultValue: 0 }),
-        option('pageAspect', 'pageAspect', 'range', range(0.7, 2, 0.01)),
-        option('preload', 'preload', 'range', {
+        option('startPage', 'Starting page', 'range', { ...range(0, 27, 1), hint: 'Applies when the magazine is remounted.', defaultValue: 0 }),
+        option('pageAspect', 'Page aspect ratio', 'range', range(0.7, 2, 0.01)),
+        option('preload', 'Preload distance', 'range', {
           ...range(0, 12, 1),
           hint: 'Pages loaded ahead; twice as far away unload',
           defaultValue: 6,
@@ -200,83 +202,82 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
       ],
     },
     {
-      title: 'Layout',
-      open: true,
+      title: 'Reading experience',
       controls: [
-        option('layout', 'layout', 'select', {
+        option('layout', 'Page layout', 'select', {
           choices: [['auto', 'auto'], ['spread', 'spread'], ['single', 'single']],
           defaultValue: 'auto',
         }),
-        option('spreadQuery', 'spreadQuery', 'text', { defaultValue: DEFAULT_SPREAD_QUERY }),
-        option('loop', 'loop', 'toggle', { hint: 'Single layout: restart after the last page' }),
-        option('bleed', 'bleed', 'toggle'),
-        option('plain', 'plain', 'toggle', { hint: 'Flat pages, no 3D', defaultValue: false }),
-        option('maxPixelRatio', 'maxPixelRatio', 'range', range(0.5, 3, 0.25)),
+        option('spreadQuery', 'Spread breakpoint', 'text', { defaultValue: DEFAULT_SPREAD_QUERY }),
+        option('loop', 'Loop at the end', 'toggle', { hint: 'Single layout: restart after the last page.' }),
+        option('bleed', 'Allow page overhang', 'toggle'),
+        option('plain', 'Flat page mode', 'toggle', { hint: 'Show flat pages without 3D.', defaultValue: false }),
+        option('maxPixelRatio', 'Maximum pixel ratio', 'range', range(0.5, 3, 0.25)),
       ],
     },
     {
-      title: 'Paper',
+      title: 'Paper & print',
       controls: [
         {
-          label: 'grain',
-          hint: 'Built-in, off, or a custom canvas',
+          label: 'Paper grain',
+          hint: 'Choose the built-in texture, turn grain off, or use a coarse sample.',
           kind: 'select',
           choices: [['on', 'on'], ['off', 'off'], ['custom (coarse)', 'coarse']],
           read: () => state.grain,
           write: (v) => (state.grain = v as Grain | undefined),
           fallback: () => 'on',
         },
-        option('paper.grainScale', 'grainScale', 'range', range(0.2, 5, 0.01)),
-        option('paper.grainStrength', 'grainStrength', 'range', range(0, 0.6, 0.01)),
-        option('paper.showThrough', 'showThrough', 'range', range(0, 0.6, 0.01)),
-        option('paper.inkGloss', 'inkGloss', 'range', range(0, 1, 0.01)),
-        option('paper.roughness', 'roughness', 'range', range(0, 1, 0.01)),
-        option('paper.metalness', 'metalness', 'range', range(0, 1, 0.01)),
-        option('paper.backColor', 'backColor', 'color', { hint: 'Back of single-layout pages' }),
-        option('paper.wrinkles', 'wrinkles', 'range', range(0, 3, 0.05)),
-        option('paper.bulge', 'bulge', 'range', range(0, 3, 0.05)),
+        option('paper.grainScale', 'Grain scale', 'range', range(0.2, 5, 0.01)),
+        option('paper.grainStrength', 'Grain strength', 'range', range(0, 0.6, 0.01)),
+        option('paper.showThrough', 'Show-through', 'range', range(0, 0.6, 0.01)),
+        option('paper.inkGloss', 'Ink gloss', 'range', range(0, 1, 0.01)),
+        option('paper.roughness', 'Surface roughness', 'range', range(0, 1, 0.01)),
+        option('paper.metalness', 'Surface metalness', 'range', range(0, 1, 0.01)),
+        option('paper.backColor', 'Unprinted paper', 'color', { hint: 'Color of the unprinted page back.' }),
+        option('paper.wrinkles', 'Resting wrinkles', 'range', range(0, 3, 0.05)),
+        option('paper.bulge', 'Spine bulge', 'range', range(0, 3, 0.05)),
       ],
     },
     {
-      title: 'Lighting',
+      title: 'Lighting & shadows',
       controls: [
-        option('lighting.ambient.sky', 'ambient.sky', 'color'),
-        option('lighting.ambient.ground', 'ambient.ground', 'color'),
-        option('lighting.ambient.intensity', 'ambient.intensity', 'range', range(0, 4, 0.05)),
-        option('lighting.sun.color', 'sun.color', 'color'),
-        option('lighting.sun.intensity', 'sun.intensity', 'range', range(0, 6, 0.05)),
-        option('lighting.sun.position', 'sun.position', 'vec3', range(-6, 6, 0.1)),
-        option('lighting.shadows', 'shadows', 'toggle'),
-        option('lighting.shadowMapSize', 'shadowMapSize', 'select', {
+        option('lighting.ambient.sky', 'Ambient sky color', 'color'),
+        option('lighting.ambient.ground', 'Ambient ground color', 'color'),
+        option('lighting.ambient.intensity', 'Ambient intensity', 'range', range(0, 4, 0.05)),
+        option('lighting.sun.color', 'Sunlight color', 'color'),
+        option('lighting.sun.intensity', 'Sunlight intensity', 'range', range(0, 6, 0.05)),
+        option('lighting.sun.position', 'Sunlight position', 'vec3', range(-6, 6, 0.1)),
+        option('lighting.shadows', 'Cast page shadows', 'toggle'),
+        option('lighting.shadowMapSize', 'Shadow resolution', 'select', {
           choices: [['512', 512], ['1024', 1024], ['2048', 2048], ['4096', 4096]],
         }),
-        option('lighting.floorShadow', 'floorShadow', 'range', range(0, 0.6, 0.01)),
+        option('lighting.floorShadow', 'Ground shadow opacity', 'range', range(0, 0.6, 0.01)),
       ],
     },
     {
-      title: 'Motion',
+      title: 'Page motion',
       controls: [
-        option('motion.speed', 'speed', 'range', range(0.1, 4, 0.05)),
-        option('motion.dragDistance', 'dragDistance', 'range', range(0.2, 2, 0.05)),
-        option('motion.commitThreshold', 'commitThreshold', 'range', range(0, 0.6, 0.01)),
-        option('motion.curl', 'curl', 'range', range(0, 2, 0.05)),
-        option('motion.maxTilt', 'maxTilt', 'range', range(0, 80, 1)),
-        option('motion.jitter', 'jitter', 'toggle'),
-        option('motion.hoverLift', 'hoverLift', 'range', range(0, 0.15, 0.005)),
-        option('motion.reducedMotion', 'reducedMotion', 'select', {
+        option('motion.speed', 'Turn speed', 'range', range(0.1, 4, 0.05)),
+        option('motion.dragDistance', 'Drag distance', 'range', range(0.2, 2, 0.05)),
+        option('motion.commitThreshold', 'Turn threshold', 'range', range(0, 0.6, 0.01)),
+        option('motion.curl', 'Page curl', 'range', range(0, 2, 0.05)),
+        option('motion.maxTilt', 'Maximum tilt', 'range', range(0, 80, 1)),
+        option('motion.jitter', 'Natural variation', 'toggle'),
+        option('motion.hoverLift', 'Hover lift', 'range', range(0, 0.15, 0.005)),
+        option('motion.reducedMotion', 'Reduced motion', 'select', {
           choices: [['auto', 'auto'], ['true', true], ['false', false]],
           defaultValue: 'auto',
         }),
       ],
     },
     {
-      title: 'Interaction',
+      title: 'Input & interaction',
       controls: [
-        option('interaction.drag', 'drag', 'toggle'),
-        option('interaction.click', 'click', 'toggle'),
-        option('interaction.hold', 'hold', 'toggle'),
-        option('interaction.hover', 'hover', 'toggle'),
-        option('interaction.keyboard', 'keyboard', 'select', {
+        option('interaction.drag', 'Drag to turn', 'toggle'),
+        option('interaction.click', 'Click to turn', 'toggle'),
+        option('interaction.hold', 'Hold to riffle', 'toggle'),
+        option('interaction.hover', 'Hover lift', 'toggle'),
+        option('interaction.keyboard', 'Keyboard navigation', 'select', {
           choices: [['true (on focus)', true], ['global', 'global'], ['false', false]],
         }),
       ],
@@ -284,10 +285,10 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     {
       title: 'Accessibility',
       controls: [
-        option('label', 'label', 'text', { defaultValue: 'Magazine' }),
+        option('label', 'Reader label', 'text', { defaultValue: 'Magazine' }),
         {
-          label: 'formatPageLabel',
-          hint: 'Use a custom announcement function',
+          label: 'Custom page announcement',
+          hint: 'Use a custom announcement for assistive technology.',
           kind: 'toggle',
           read: () => state.customLabel,
           write: (v) => (state.customLabel = v as boolean | undefined),
@@ -308,6 +309,96 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     return node
   }
   const format = (v: unknown) => (typeof v === 'number' ? String(Math.round(v * 1000) / 1000) : String(v))
+
+  const example = currentExample()
+  const stage = document.getElementById('stage')
+  const stageGuide = el('div', { class: 'stage-guide' })
+  stageGuide.append(
+    el('p', { class: 'stage-guide-primary' }, 'Drag a page to turn it, or use the arrows below.'),
+    el('p', { class: 'stage-guide-secondary' }, 'Press and hold a page to flip through several pages.'),
+    el('p', { class: 'stage-guide-secondary' }, `Use View code to copy the ${example.name} setup.`),
+  )
+  const stageNav = el('div', { class: 'stage-nav', 'aria-label': 'Magazine controls' })
+  const previous = el('button', { class: 'stage-arrow', type: 'button', 'aria-label': 'Previous pages' }, '←')
+  previous.onclick = () => {
+    const result = host.handle()?.prev()
+    event('prev()', result)
+  }
+  const pageIndicator = el('span', { class: 'page-indicator', 'aria-live': 'polite' }, '— / —')
+  const next = el('button', { class: 'stage-arrow stage-next', type: 'button', 'aria-label': 'Next pages' }, '→')
+  next.onclick = () => {
+    const result = host.handle()?.next()
+    event('next()', result)
+  }
+  const codeToggle = el('button', { class: 'code-toggle', type: 'button', 'aria-label': `View ${example.name} code example`, 'aria-haspopup': 'dialog' })
+  const codeIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  codeIcon.setAttribute('viewBox', '0 0 256 256')
+  codeIcon.setAttribute('aria-hidden', 'true')
+  const codePath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  codePath.setAttribute('d', 'M93.31,70,28,128l65.27,58a8,8,0,1,1-10.62,12l-72-64a8,8,0,0,1,0-12l72-64A8,8,0,1,1,93.31,70Zm152,52-72-64a8,8,0,0,0-10.62,12L228,128l-65.27,58a8,8,0,1,0,10.62,12l72-64a8,8,0,0,0,0-12Z')
+  codeIcon.append(codePath)
+  codeToggle.append(codeIcon, el('span', {}, 'View code'))
+  stageNav.append(previous, pageIndicator, next)
+  const codeDialog = el('dialog', { class: 'code-dialog', 'aria-labelledby': 'code-dialog-title' })
+  const codeDialogHeader = el('div', { class: 'code-dialog-header' })
+  codeDialogHeader.append(
+    el('span', { class: 'code-dialog-kicker' }, 'Framework example'),
+    el('h2', { id: 'code-dialog-title' }, `${example.name} setup`),
+  )
+  const closeCode = el('button', { class: 'code-dialog-close', type: 'button', 'aria-label': 'Close code example' })
+  closeCode.onclick = () => codeDialog.close()
+  codeDialogHeader.append(closeCode)
+  const codeBlock = el('pre')
+  codeBlock.append(el('code', {}, example.code))
+  const copyCode = el('button', { class: 'copy-code', type: 'button' }, 'Copy code')
+  copyCode.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(example.code)
+      copyCode.textContent = 'Copied'
+      setTimeout(() => (copyCode.textContent = 'Copy code'), 1600)
+    } catch {
+      copyCode.textContent = 'Select the code to copy'
+    }
+  }
+  codeDialog.append(
+    codeDialogHeader,
+    el('p', { class: 'code-dialog-note' }, 'Replace the sample image paths with your page artwork.'),
+    codeBlock,
+    copyCode,
+  )
+  codeToggle.onclick = () => {
+    codeDialog.showModal()
+    closeCode.focus()
+  }
+  codeDialog.addEventListener('close', () => codeToggle.focus())
+  stage?.append(stageGuide, stageNav, codeDialog)
+  document.querySelector('header .github')?.after(codeToggle)
+  const settingsToggle = document.querySelector<HTMLButtonElement>('[data-settings-toggle]')
+  const settingsToggleText = settingsToggle?.querySelector('span')
+  const panelIntro = el('div', { class: 'panel-intro' })
+  const panelIntroHead = el('div', { class: 'panel-intro-head' })
+  panelIntroHead.append(el('h2', {}, 'Customize the reader'))
+  const closeSettings = el('button', { class: 'close-settings', type: 'button', 'aria-label': 'Close settings', title: 'Close settings' })
+  function setSettingsOpen(open: boolean) {
+    document.body.classList.toggle('settings-open', open)
+    settingsToggle?.setAttribute('aria-expanded', String(open))
+    settingsToggle?.setAttribute('aria-label', open ? 'View preview' : 'Customize reader')
+    if (settingsToggleText) settingsToggleText.textContent = open ? 'View preview' : 'Customize'
+    if (open) closeSettings.focus()
+    else settingsToggle?.focus()
+  }
+  settingsToggle?.setAttribute('aria-label', 'Customize reader')
+  settingsToggle?.addEventListener('click', () => setSettingsOpen(!document.body.classList.contains('settings-open')))
+  closeSettings.onclick = () => setSettingsOpen(false)
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && document.body.classList.contains('settings-open')) {
+      event.preventDefault()
+      setSettingsOpen(false)
+    }
+  })
+  panelIntroHead.append(closeSettings)
+  panelIntro.append(panelIntroHead, el('p', {}, 'Tune the pages, materials, and motion. Changes update the reader immediately.'))
+  container.append(panelIntro)
 
   const syncs: (() => void)[] = []
 
@@ -388,6 +479,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
       }
     } else {
       // vec3: three sliders
+      field.classList.add('field-vec3')
       const inputs = [0, 1, 2].map((axis) => {
         const input = el('input', {
           type: 'range',
@@ -422,8 +514,8 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   }
 
   // methods
-  const methods = el('details', { open: '' })
-  methods.append(el('summary', {}, 'Methods'))
+  const methods = el('details')
+  methods.append(el('summary', {}, 'Navigation methods'))
   const buttons = el('div', { class: 'buttons' })
   const call = (label: string, fn: () => unknown) => {
     const button = el('button', { type: 'button' }, label)
@@ -463,7 +555,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   methods.append(buttons, goTo, lifecycle)
 
   // properties
-  const properties = el('details', { open: '' })
+  const properties = el('details')
   properties.append(el('summary', {}, 'Properties'))
   const readout = el('dl', { class: 'readout' })
   const propertyRows = (['page', 'visiblePages', 'pageCount', 'layout'] as const).map((key) => {
@@ -474,14 +566,14 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   properties.append(readout)
 
   // events
-  const events = el('details', { open: '' })
+  const events = el('details')
   events.append(el('summary', {}, 'Events'))
   const log = el('ol', { class: 'log' })
   events.append(log)
 
   // options snippet
   const code = el('details')
-  code.append(el('summary', {}, 'Current options'))
+  code.append(el('summary', {}, 'Current options (core API)'))
   const snippet = el('pre')
   const copy = el('button', { type: 'button' }, 'Copy')
   copy.onclick = async () => {
@@ -491,7 +583,9 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   }
   code.append(copy, snippet)
 
-  container.append(methods, properties, events)
+  const developerTools = el('details')
+  developerTools.append(el('summary', {}, 'Developer tools'))
+  developerTools.append(methods, properties, events, code)
   for (const section of sections) {
     const details = el('details')
     if (section.open) details.open = true
@@ -499,7 +593,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     for (const control of section.controls) renderControl(control, details)
     container.append(details)
   }
-  container.append(code)
+  container.append(developerTools)
 
   // --- behaviour ---------------------------------------------------------------------
 
@@ -558,6 +652,16 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     for (const { key, value } of propertyRows) {
       const v = handle ? handle[key] : '—'
       value.textContent = Array.isArray(v) ? `[${v.join(', ')}]` : String(v)
+    }
+    if (handle) {
+      const pages = handle.visiblePages
+      const first = pages.length ? Math.min(...pages) + 1 : handle.page + 1
+      const last = pages.length ? Math.max(...pages) + 1 : first
+      pageIndicator.textContent = `${first}${last !== first ? `–${last}` : ''} / ${handle.pageCount}`
+      previous.disabled = handle.page <= 0
+      next.disabled = last >= handle.pageCount && (handle.layout === 'spread' || state.options.loop === false)
+      if (stage) stage.dataset.layout = handle.layout ?? ''
+      stageGuide.classList.toggle('is-hidden', handle.page !== 0 || handle.turning)
     }
     if (handle?.layout !== lastLayout) {
       lastLayout = handle?.layout

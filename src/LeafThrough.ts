@@ -197,6 +197,11 @@ export class LeafThrough extends EventTarget {
     return !this.renderer || !!this.options.plain
   }
 
+  /** True while a page is being dragged or is completing its turn. */
+  get turning(): boolean {
+    return this.view?.engine.turning ?? false
+  }
+
   /** Turns to the next page. Returns false at the end. */
   next(): boolean {
     this.stopRiffle()

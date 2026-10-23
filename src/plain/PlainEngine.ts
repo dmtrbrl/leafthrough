@@ -44,6 +44,10 @@ export class PlainEngine implements Engine {
     return this.current
   }
 
+  get turning() {
+    return false
+  }
+
   // closed, only the cover side can be clicked
   get activeSide() {
     if (!this.spread) return 'both'
