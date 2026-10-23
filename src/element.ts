@@ -62,6 +62,16 @@ export class LeafThroughElement extends BaseElement {
     this.mount = document.createElement('div')
     // children stay in the light DOM as the page list (and as fallback content); hide them
     shadow.append(style, this.mount)
+
+    // A property set before the element was defined is an own property that hides the
+    // setter; move it through the setter, so later assignments reach the magazine.
+    const self = this as unknown as Record<string, unknown>
+    for (const key of ['pages', 'options']) {
+      if (!Object.hasOwn(this, key)) continue
+      const value = self[key]
+      delete self[key]
+      self[key] = value
+    }
   }
 
   /** The pages, in reading order. */
