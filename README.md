@@ -226,7 +226,12 @@ Both compare options by value. Changing callbacks or the label is free. Changing
 `layout`, paper, lighting, motion or interaction rebuilds the scene (a few milliseconds)
 and keeps the reader on the same page. `startPage` only applies at creation; use `goTo()`
 after that. The React, Vue and Svelte bindings and the element use `setOptions()`, so
-removing a prop or attribute restores its default.
+removing a prop or attribute restores its default. Options are copied on every call, so an
+object or array changed in place and passed again (as Vue's reactive props are) counts as
+a change.
+
+The constructor throws when the browser can't create a WebGL context, and adds nothing to
+the page. Catch it to show a fallback, such as the plain images.
 
 ## Pages
 
@@ -237,6 +242,9 @@ removing a prop or attribute restores its default.
   through.
 - **Cross-origin URLs.** URLs on another origin need CORS headers, because the images are
   uploaded to WebGL.
+- **Textures.** A three.js `Texture` you pass in is never disposed, but the magazine sets its
+  `colorSpace`, `premultiplyAlpha` and `anisotropy`. Give it a texture of its own if you
+  use the same one elsewhere.
 - **Load order.** Pages load nearest-first, four at a time. Pages that haven't arrived show
   blank paper.
 - **Spread order.** In `spread`, the front cover sits alone on the right, then pages pair up
@@ -255,6 +263,7 @@ off screen or the tab is hidden.
 npm install
 npm run dev          # demo playground: a page per binding, each with the dev panel
 npm run typecheck
+npm test             # browser tests in headless Chromium (first run: npx playwright install chromium)
 npm run build        # dist/: ESM bundles + type declarations
 npm run build:demo   # static demo site in dist-demo/ (published to GitHub Pages on every push to main)
 LEAFTHROUGH_DIST=1 npx vite   # run the demo against the built dist/ instead of src/

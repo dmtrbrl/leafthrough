@@ -41,6 +41,8 @@
   "include": [
     "src",
     "demo",
+    "test",
+    "vitest.config.ts",
     "vite.config.ts",
     "tsup.config.ts"
   ]
