@@ -134,6 +134,30 @@ describe('Web Component', () => {
     expect(el.instance?.pageCount).toBe(5)
   })
 
+  test('image alt and figure captions describe the pages', async () => {
+    const el = create()
+    const [first, second] = pages(2).map((canvas) => canvas.toDataURL())
+    el.innerHTML = `<img src="${first}" alt="A lighthouse"><figure><img src="${second}" alt=""><figcaption> Contents </figcaption></figure>`
+    el.options = base
+    stage.append(el)
+    await pause()
+    expect(el.pages).toEqual([
+      { src: first, alt: 'A lighthouse', text: undefined },
+      { src: second, alt: undefined, text: 'Contents' },
+    ])
+  })
+
+  test('pageload events bubble from the element', async () => {
+    const el = create()
+    const loaded: number[] = []
+    stage.addEventListener('pageload', (e) => loaded.push((e as CustomEvent<{ page: number }>).detail.page))
+    el.pages = pages(2)
+    el.options = base
+    stage.append(el)
+    await pause()
+    expect(loaded.sort()).toEqual([0, 1])
+  })
+
   test('a start-page attribute that isn’t a number opens on the first page', async () => {
     const el = create()
     el.setAttribute('start-page', 'abc')

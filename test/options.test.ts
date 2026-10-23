@@ -99,17 +99,3 @@ test('a custom grain that fails after dispose reports nothing', async () => {
   }
 })
 
-test('without WebGL the constructor throws and leaves nothing behind', () => {
-  const original = HTMLCanvasElement.prototype.getContext
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
-    return type.includes('webgl') ? null : original.call(this, type, ...(rest as []))
-  } as typeof original
-  try {
-    expect(() => new LeafThrough(stage, { ...base, pages: pages(1) })).toThrow()
-    expect(stage.children.length).toBe(0)
-  } finally {
-    HTMLCanvasElement.prototype.getContext = original
-    errors.mockRestore()
-  }
-})

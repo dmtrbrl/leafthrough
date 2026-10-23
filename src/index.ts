@@ -9,6 +9,8 @@ export {
   type LightingOptions,
   type MotionOptions,
   type PageChangeDetail,
+  type PageDescriptor,
+  type PageImage,
   type PageSource,
   type PaperOptions,
 } from './options.js'

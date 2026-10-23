@@ -1,7 +1,19 @@
 import type { ColorRepresentation, Texture } from 'three'
 
 /** Anything a page can be printed from. Strings are image URLs. */
-export type PageSource = string | HTMLImageElement | HTMLCanvasElement | ImageBitmap | Texture
+export type PageImage = string | HTMLImageElement | HTMLCanvasElement | ImageBitmap | Texture
+
+/** A page image with what's on it, for screen readers and the plain view. */
+export interface PageDescriptor {
+  src: PageImage
+  /** A short description of the page, like an image's alt text. */
+  alt?: string
+  /** The page's text, or a transcript of it. Blank lines separate paragraphs. */
+  text?: string
+}
+
+/** A page: its image, or a descriptor with the image and what's on it. */
+export type PageSource = PageImage | PageDescriptor
 
 /**
  * `spread`: an open magazine, two pages side by side, sheets turning over the spine.
@@ -124,6 +136,17 @@ export interface LeafThroughOptions {
   interaction?: InteractionOptions
   /** Upper limit for the canvas pixel ratio. Default `2`. */
   maxPixelRatio?: number
+  /**
+   * How many pages either side of the visible ones to load ahead. Pages more than twice as
+   * far away are unloaded, which frees their memory. `Infinity` loads and keeps every page.
+   * Default `6`.
+   */
+  preload?: number
+  /**
+   * Shows the pages as flat images, without 3D. The magazine switches to this by itself when
+   * the browser can't run WebGL. Default `false`.
+   */
+  plain?: boolean
   /** Accessible name. Default `'Magazine'`. */
   label?: string
   /** Text announced to screen readers when pages change. */
@@ -131,6 +154,8 @@ export interface LeafThroughOptions {
 
   onPageChange?: (detail: PageChangeDetail) => void
   onReady?: () => void
+  /** A page's image has loaded. Fires again if the page is unloaded and loads later. */
+  onPageLoad?: (page: number) => void
   onError?: (error: unknown, page?: number) => void
 }
 
@@ -142,6 +167,12 @@ export function defaultPageLabel({ visiblePages, pageCount }: PageChangeDetail):
   const [first, last] = [visiblePages[0] + 1, visiblePages[visiblePages.length - 1] + 1]
   return first === last ? `Page ${first} of ${pageCount}` : `Pages ${first}–${last} of ${pageCount}`
 }
+
+export function isPageDescriptor(page: PageSource): page is PageDescriptor {
+  return typeof page === 'object' && page !== null && Object.getPrototypeOf(page) === Object.prototype && 'src' in page
+}
+
+export const pageImage = (page: PageSource): PageImage => (isPageDescriptor(page) ? page.src : page)
 
 /** Everything an engine needs, with layout defaults filled in. */
 export interface ResolvedSettings {

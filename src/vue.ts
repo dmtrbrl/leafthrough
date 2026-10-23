@@ -35,12 +35,15 @@ export const LeafThrough = defineComponent({
     motion: Object as PropType<MotionOptions>,
     interaction: Object as PropType<InteractionOptions>,
     maxPixelRatio: Number,
+    preload: Number,
+    plain: { type: Boolean, default: undefined },
     label: String,
     formatPageLabel: Function as PropType<LeafThroughOptions['formatPageLabel']>,
   },
   emits: {
     pagechange: (_detail: PageChangeDetail) => true,
     ready: () => true,
+    pageload: (_page: number) => true,
     error: (_error: unknown, _page?: number) => true,
   },
   setup(props, { emit, expose }) {
@@ -50,6 +53,7 @@ export const LeafThrough = defineComponent({
     const events = {
       onPageChange: (detail: PageChangeDetail) => emit('pagechange', detail),
       onReady: () => emit('ready'),
+      onPageLoad: (page: number) => emit('pageload', page),
       onError: (error: unknown, page?: number) => emit('error', error, page),
     }
     // every prop, set or not: unset ones fall back to the magazine's defaults

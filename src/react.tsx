@@ -43,6 +43,7 @@ export const LeafThrough = forwardRef<LeafThroughHandle, LeafThroughProps>(funct
   const callbacks = useRef({
     onPageChange: (detail: PageChangeDetail) => latest.current.onPageChange?.(detail),
     onReady: () => latest.current.onReady?.(),
+    onPageLoad: (page: number) => latest.current.onPageLoad?.(page),
     onError: (error: unknown, page?: number) => {
       const handler = latest.current.onError
       if (handler) handler(error, page)

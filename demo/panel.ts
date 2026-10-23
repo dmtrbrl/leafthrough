@@ -32,7 +32,7 @@ export interface Panel {
   event(name: string, detail?: unknown): void
 }
 
-type DataOptions = Omit<LeafThroughOptions, 'pages' | 'onPageChange' | 'onReady' | 'onError' | 'formatPageLabel'>
+type DataOptions = Omit<LeafThroughOptions, 'pages' | 'onPageChange' | 'onReady' | 'onPageLoad' | 'onError' | 'formatPageLabel'>
 type Source = 'urls' | 'broken'
 type Grain = 'on' | 'off' | 'coarse'
 
@@ -192,6 +192,11 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
         },
         option('startPage', 'startPage', 'range', { ...range(0, 27, 1), hint: 'Applies on Remount', defaultValue: 0 }),
         option('pageAspect', 'pageAspect', 'range', range(0.7, 2, 0.01)),
+        option('preload', 'preload', 'range', {
+          ...range(0, 12, 1),
+          hint: 'Pages loaded ahead; twice as far away unload',
+          defaultValue: 6,
+        }),
       ],
     },
     {
@@ -205,6 +210,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
         option('spreadQuery', 'spreadQuery', 'text', { defaultValue: DEFAULT_SPREAD_QUERY }),
         option('loop', 'loop', 'toggle', { hint: 'Single layout: restart after the last page' }),
         option('bleed', 'bleed', 'toggle'),
+        option('plain', 'plain', 'toggle', { hint: 'Flat pages, no 3D', defaultValue: false }),
         option('maxPixelRatio', 'maxPixelRatio', 'range', range(0.5, 3, 0.25)),
       ],
     },
@@ -512,7 +518,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   function snippetText() {
     const data: Record<string, unknown> = { ...state.options }
     const lines = [
-      `// ${state.pageCount ?? demoPages.length} pages from image URLs`,
+      `// ${state.pageCount ?? demoPages.length} pages: image URLs with alt and text`,
       `const pages = ${JSON.stringify(pagesFor(state.pageCount ?? demoPages.length, state.source ?? 'urls'), null, 2)}`,
     ]
     if (state.grain) setPath(data, 'paper.grain', state.grain === 'coarse' ? '<your grain image>' : state.grain === 'on')
