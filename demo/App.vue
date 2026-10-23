@@ -54,6 +54,7 @@ const options = shallowRef<LeafThroughOptions>(panel.options())
     v-bind="options"
     @pagechange="(detail) => panel.event('pagechange', detail)"
     @ready="() => panel.event('ready')"
+    @pageload="(page) => panel.event('pageload', { page })"
     @error="(error, page) => panel.event('error', { message: String(error), page })"
   />
 </template>

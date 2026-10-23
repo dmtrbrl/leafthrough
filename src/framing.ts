@@ -62,6 +62,19 @@ export function framingFor(layout: Layout, aspect: number): Framing {
   }
 }
 
+/** The plain view: just the pages, centred, with nothing around them. */
+export function plainFramingFor(layout: Layout, aspect: number): Framing {
+  const box = layout === 'spread' ? { x: -1, y: -aspect / 2, width: 2, height: aspect } : { x: 0, y: -aspect / 2, width: 1, height: aspect }
+  return {
+    box,
+    view: box,
+    eye: { x: box.x + box.width / 2, y: 0 },
+    distance: 1,
+    dragWidth: box.width,
+    shadow: { left: 0, right: 0, top: 0, bottom: 0 },
+  }
+}
+
 export interface Fit {
   /** Pixels per world unit. */
   scale: number

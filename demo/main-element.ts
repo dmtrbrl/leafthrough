@@ -16,6 +16,7 @@ function create(options: LeafThroughOptions) {
   element.options = options
   element.addEventListener('pagechange', (e) => panel.event('pagechange', e.detail))
   element.addEventListener('ready', () => panel.event('ready'))
+  element.addEventListener('pageload', (e) => panel.event('pageload', e.detail))
   element.addEventListener('pageerror', (e) => panel.event('pageerror', { message: String(e.detail.error), page: e.detail.page }))
   stage.append(element)
 }

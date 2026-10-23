@@ -26,6 +26,7 @@
       onInit: (m) => (magazine = m),
       onPageChange: (detail) => panel.event('pagechange', detail),
       onReady: () => panel.event('ready'),
+      onPageLoad: (page) => panel.event('pageload', { page }),
       onError: (error, page) => panel.event('error', { message: String(error), page }),
     }}
   ></div>

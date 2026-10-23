@@ -13,10 +13,12 @@ const ATTRIBUTES = {
   bleed: 'bleed',
   label: 'label',
   keyboard: 'keyboard',
+  preload: 'preload',
+  plain: 'plain',
 } as const
 
-const NUMBERS = new Set(['startPage', 'pageAspect'])
-const BOOLEANS = new Set(['loop', 'bleed'])
+const NUMBERS = new Set(['startPage', 'pageAspect', 'preload'])
+const BOOLEANS = new Set(['loop', 'bleed', 'plain'])
 
 const BaseElement = (typeof HTMLElement !== 'undefined' ? HTMLElement : class {}) as typeof HTMLElement
 
@@ -24,24 +26,30 @@ const BaseElement = (typeof HTMLElement !== 'undefined' ? HTMLElement : class {}
  * `<leaf-through>`: works anywhere HTML does, including Angular, Solid and Lit.
  *
  * Pages come from the `pages` property, a `pages` attribute (JSON array or comma-separated
- * URLs), or the element's `<img>` children. Everything else can be set through the
- * `options` property or the attributes `start-page`, `layout`, `spread-query`,
- * `page-aspect`, `loop`, `bleed`, `label` and `keyboard`.
+ * URLs), or the element's `<img>` children: their `alt` describes the page, and a
+ * `<figcaption>` next to one in a `<figure>` gives the page's text. Everything else can be
+ * set through the `options` property or the attributes `start-page`, `layout`,
+ * `spread-query`, `page-aspect`, `loop`, `bleed`, `label`, `keyboard`, `preload` and `plain`.
  *
- * Events (all bubble): `pagechange` (detail: PageChangeDetail), `ready`, and `pageerror`
+ * Events (all bubble): `pagechange` (detail: PageChangeDetail), `ready`, `pageload`
+ * (detail: `{ page }`), and `pageerror`
  * (detail: `{ error, page }`). It isn't called `error`, which on the DOM means a script
  * error and reaches `window`, where error trackers listen.
  *
  * ```html
  * <leaf-through style="height: 80vh" layout="auto">
- *   <img src="/pages/01.jpg" alt="Cover" />
- *   <img src="/pages/02.jpg" alt="" />
+ *   <img src="/pages/01.jpg" alt="Cover: a lighthouse at dusk" />
+ *   <figure>
+ *     <img src="/pages/02.jpg" alt="" />
+ *     <figcaption>Contents. Page 3: The keeper's year…</figcaption>
+ *   </figure>
  * </leaf-through>
  * ```
  */
 export interface LeafThroughElementEventMap extends HTMLElementEventMap {
   pagechange: CustomEvent<PageChangeDetail>
   ready: CustomEvent<void>
+  pageload: CustomEvent<{ page: number }>
   pageerror: CustomEvent<{ error: unknown; page?: number }>
 }
 
@@ -62,6 +70,16 @@ export class LeafThroughElement extends BaseElement {
     this.mount = document.createElement('div')
     // children stay in the light DOM as the page list (and as fallback content); hide them
     shadow.append(style, this.mount)
+
+    // A property set before the element was defined is an own property that hides the
+    // setter; move it through the setter, so later assignments reach the magazine.
+    const self = this as unknown as Record<string, unknown>
+    for (const key of ['pages', 'options']) {
+      if (!Object.hasOwn(this, key)) continue
+      const value = self[key]
+      delete self[key]
+      self[key] = value
+    }
   }
 
   /** The pages, in reading order. */
@@ -138,7 +156,7 @@ export class LeafThroughElement extends BaseElement {
     this.childObserver = new MutationObserver(() => {
       if (!this.explicitPages) this.sync()
     })
-    this.childObserver.observe(this, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
+    this.childObserver.observe(this, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['src', 'alt'] })
     this.sync()
   }
 
@@ -158,14 +176,19 @@ export class LeafThroughElement extends BaseElement {
       const trimmed = attribute.trim()
       if (trimmed.startsWith('[')) {
         try {
-          return JSON.parse(trimmed) as string[]
+          return JSON.parse(trimmed) as PageSource[]
         } catch {
           return []
         }
       }
       return trimmed.split(',').map((s) => s.trim()).filter(Boolean)
     }
-    return Array.from(this.querySelectorAll('img'), (img) => img.currentSrc || img.src).filter(Boolean)
+    return Array.from(this.querySelectorAll('img')).flatMap((img): PageSource[] => {
+      const src = img.currentSrc || img.src
+      if (!src) return []
+      const text = img.closest('figure')?.querySelector('figcaption')?.textContent?.trim()
+      return img.alt || text ? [{ src, alt: img.alt || undefined, text: text || undefined }] : [src]
+    })
   }
 
   private optionsFromAttributes(): Partial<LeafThroughOptions> {
@@ -199,12 +222,20 @@ export class LeafThroughElement extends BaseElement {
         this.extra.onReady?.()
         this.dispatchEvent(new CustomEvent('ready', { bubbles: true, composed: true }))
       },
+      onPageLoad: (page: number) => {
+        this.extra.onPageLoad?.(page)
+        this.dispatchEvent(new CustomEvent('pageload', { detail: { page }, bubbles: true, composed: true }))
+      },
       onError: (error: unknown, page?: number) => {
         this.extra.onError?.(error, page)
         this.dispatchEvent(new CustomEvent('pageerror', { detail: { error, page }, bubbles: true, composed: true }))
       },
     }
-    if (!pages.length) return
+    if (!pages.length) {
+      this.magazine?.dispose()
+      this.magazine = null
+      return
+    }
     if (this.magazine) this.magazine.setOptions(options)
     else this.magazine = new LeafThrough(this.mount, options)
   }

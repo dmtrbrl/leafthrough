@@ -129,7 +129,8 @@ export class SingleEngine implements Engine {
   private current: number
   private flights: Flight[] = []
   private drag: Drag | null = null
-  private press: { x: number; y: number } | null = null
+  // the pointer that started the gesture; other pointers are ignored until it lifts
+  private press: { id: number; x: number; y: number } | null = null
   private hold: Hold | null = null
   private touch: { x: number; y: number; claimed: boolean } | null = null
   private dirty = true
@@ -358,6 +359,7 @@ export class SingleEngine implements Engine {
     el.addEventListener(
       'pointermove',
       (e) => {
+        if (this.press && e.pointerId !== this.press.id) return
         if (this.hold && this.moved(e, this.hold.fired ? HOLD.moveSlopPx : undefined)) this.cancelHold()
         if (!this.drag || !this.press || !interaction.drag) return
         const dx = e.clientX - this.press.x
@@ -371,6 +373,8 @@ export class SingleEngine implements Engine {
     el.addEventListener(
       'pointerdown',
       (e) => {
+        // a second finger doesn't take over; a new primary pointer means the old one is gone
+        if (this.press && !e.isPrimary) return
         if (e.button !== 0 || !(interaction.drag || interaction.click || interaction.hold)) return
         const target = this.sheetAt(e.clientX)
         if (!target) return
@@ -378,7 +382,7 @@ export class SingleEngine implements Engine {
         if (!this.inFlight(sheet)) sheet.wobble = this.randomWobble()
         this.grab(sheet, this.floorPoint(e.clientX, e.clientY), true)
         this.flights = this.flights.filter((f) => f.sheet !== sheet)
-        this.press = { x: e.clientX, y: e.clientY }
+        this.press = { id: e.pointerId, x: e.clientX, y: e.clientY }
         this.drag = {
           sheet,
           forward: target.forward,
@@ -408,6 +412,7 @@ export class SingleEngine implements Engine {
 
     el.addEventListener('pointerup', (e) => this.release(e), { signal })
     el.addEventListener('pointercancel', (e) => this.release(e), { signal })
+    el.addEventListener('lostpointercapture', (e) => this.release(e), { signal })
 
     if (!interaction.drag) return
     // let vertical swipes scroll the page, take over the flatter ones
@@ -474,7 +479,10 @@ export class SingleEngine implements Engine {
     )
   }
 
+  // pointercancel and lostpointercapture put the page back; only pointerup completes a turn
   private release(e: PointerEvent) {
+    if (!this.press || e.pointerId !== this.press.id) return
+    const cancelled = e.type !== 'pointerup'
     const wasMoved = this.moved(e)
     this.cancelHold()
     const drag = this.drag
@@ -488,13 +496,13 @@ export class SingleEngine implements Engine {
 
     // a click turns the page
     if (!wasMoved || !interaction.drag) {
-      if (e.type !== 'pointercancel' && interaction.click) this.fly(drag.sheet, drag.forward, drag.forward ? 1 : 0)
+      if (!cancelled && interaction.click) this.fly(drag.sheet, drag.forward, drag.forward ? 1 : 0)
       else this.settleBack(drag)
       return
     }
 
     let to: number
-    if (e.type === 'pointercancel') to = drag.forward ? 0 : 1
+    if (cancelled) to = drag.forward ? 0 : 1
     else {
       const travelled = drag.forward ? drag.progress - drag.base : drag.base - drag.progress
       to = drag.forward === travelled >= this.settings.motion.commitThreshold ? 1 : 0

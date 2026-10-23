@@ -1,0 +1,59 @@
+# Checks every push and pull request: types, the library build, the browser tests, and the
+# packed tarball in a clean project. The tests also run against the oldest peers the README
+# promises and the newest ones; the weekly run catches a new three.js release breaking the
+# shader patches.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Install the packed tarball in a clean project and import every entry point
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/consumer" && cd "$RUNNER_TEMP/consumer"
+          npm init -y > /dev/null
+          npm install "$RUNNER_TEMP"/leafthrough-*.tgz three react vue svelte
+          node --input-type=module -e "
+            for (const entry of ['leafthrough', 'leafthrough/element', 'leafthrough/react', 'leafthrough/vue', 'leafthrough/svelte']) await import(entry)
+          "
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        peers: [locked, minimum, latest]
+    name: test (${{ matrix.peers }} peers)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - if: matrix.peers == 'minimum'
+        run: npm install --no-save --legacy-peer-deps three@0.160.0 react@18.2.0 react-dom@18.2.0 vue@3.3.0 svelte@4.0.0
+      - if: matrix.peers == 'latest'
+        run: npm install --no-save --legacy-peer-deps three@latest react@latest react-dom@latest vue@latest svelte@latest
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
