@@ -88,7 +88,7 @@ export class LeafThrough extends EventTarget {
     super()
     if (!isClient) throw new Error('LeafThrough needs a browser; create it on the client.')
     this.container = container
-    this.options = { ...options }
+    this.options = snapshot(options)
 
     const element = (this.element = document.createElement('div'))
     element.dataset.leafthrough = ''
@@ -109,9 +109,10 @@ export class LeafThrough extends EventTarget {
     this.live.style.cssText =
       'position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap'
     element.append(this.canvas, this.hitArea, this.live)
-    container.append(element)
 
+    // throws without WebGL; nothing has been added to the page yet
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true })
+    container.append(element)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFShadowMap
@@ -119,8 +120,8 @@ export class LeafThrough extends EventTarget {
     this.renderer.shadowMap.autoUpdate = false
 
     this.blank = solidTexture('#fcfcf9')
-    const backColor = String(options.paper?.backColor ?? '#fcfcf9')
-    this.backBlank = { texture: solidTexture(backColor), color: backColor }
+    const backColor = options.paper?.backColor ?? '#fcfcf9'
+    this.backBlank = { texture: solidTexture(backColor), color: colorKey(backColor) }
 
     const signal = this.abort.signal
     this.watchSpreadQuery()
@@ -184,7 +185,7 @@ export class LeafThrough extends EventTarget {
 
   /** Shows `page` (0-based), jumping there or turning the pages one by one. */
   goTo(page: number, { animate = false }: GoToOptions = {}) {
-    if (!this.view) return
+    if (!this.view || Number.isNaN(page)) return
     this.stopRiffle()
     const engine = this.view.engine
     const target = this.pageToPosition(page, this.view.settings.layout)
@@ -208,13 +209,13 @@ export class LeafThrough extends EventTarget {
    * and keep the current page.
    */
   setOptions(options: LeafThroughOptions) {
-    this.applyOptions({ ...options })
+    this.applyOptions(options)
   }
 
-  private applyOptions(next: LeafThroughOptions) {
+  private applyOptions(options: LeafThroughOptions) {
     if (this.disposed) return
     const previous = this.options
-    this.options = next
+    const next = (this.options = snapshot(options))
 
     const keys = new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof LeafThroughOptions>
     const changed = [...keys].filter((key) => !deepEqual(previous[key], next[key]))
@@ -336,10 +337,10 @@ export class LeafThrough extends EventTarget {
 
     const pages = this.options.pages
     const textures = pages.map((_, i) => this.loader?.textures[i] ?? this.blank)
-    const backColor = String(settings.paper.backColor)
+    const backColor = colorKey(settings.paper.backColor)
     if (backColor !== this.backBlank.color) {
       this.backBlank.texture.dispose()
-      this.backBlank.texture = solidTexture(backColor)
+      this.backBlank.texture = solidTexture(settings.paper.backColor)
       this.backBlank.color = backColor
     }
     const ctx = {
@@ -392,7 +393,9 @@ export class LeafThrough extends EventTarget {
           this.pattern.texture = loaded
           this.remount()
         },
-        (error) => this.fail(error),
+        (error) => {
+          if (this.pattern?.key === key && !this.disposed) this.fail(error)
+        },
       )
     }
     this.pattern = { texture, key }
@@ -502,7 +505,8 @@ export class LeafThrough extends EventTarget {
 
   private pageToPosition(page: number, layout: Layout) {
     const count = this.options.pages.length
-    const p = THREE.MathUtils.clamp(Math.round(page), 0, Math.max(count - 1, 0))
+    // NaN (say, from a start-page attribute that isn't a number) means the first page
+    const p = THREE.MathUtils.clamp(Math.round(page) || 0, 0, Math.max(count - 1, 0))
     return layout === 'spread' ? Math.ceil(p / 2) : p
   }
 
@@ -524,7 +528,7 @@ export class LeafThrough extends EventTarget {
 
   private emitPageChange() {
     const detail = this.detail()
-    const key = `${detail.layout}:${detail.visiblePages.join(',')}`
+    const key = `${detail.layout}:${detail.visiblePages.join(',')}/${detail.pageCount}`
     if (key === this.lastDetailKey) return
     const first = !this.lastDetailKey
     this.lastDetailKey = key
@@ -639,10 +643,23 @@ export class LeafThrough extends EventTarget {
 
 const ids = new WeakMap<object, number>()
 let nextId = 1
+function colorKey(color: THREE.ColorRepresentation) {
+  return new THREE.Color(color).getHexString()
+}
+
 function objectId(value: object) {
   let id = ids.get(value)
   if (!id) ids.set(value, (id = nextId++))
   return id
+}
+
+// Copies the plain objects and arrays, keeping everything else (textures, elements) as is.
+// Comparing against a copy sees changes made in place, such as Vue's reactive objects.
+function snapshot<T>(value: T): T {
+  if (typeof value !== 'object' || value === null) return value
+  if (Array.isArray(value)) return value.map(snapshot) as T
+  if (Object.getPrototypeOf(value) !== Object.prototype) return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, snapshot(item)])) as T
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

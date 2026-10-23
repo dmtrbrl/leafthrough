@@ -281,3 +281,7 @@ How it works:
 
 The page deformation and interaction model are reverse-engineered from the magazine on
 [paper.design/mono](https://paper.design/mono).
+
+## License
+
+[MIT](LICENSE)

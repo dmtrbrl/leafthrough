@@ -23,15 +23,17 @@ export class PageLoader {
 
   /** Starts loading, pages closest to `around` first. Resolves once `first` pages are in. */
   start(around: number, first: number[]): Promise<void> {
-    const order = this.sources.map((_, i) => i).sort((a, b) => Math.abs(a - around) - Math.abs(b - around))
-    const firstReady = Promise.all(first.filter((i) => i >= 0 && i < this.sources.length).map((i) => this.load(i)))
+    const wanted = first.filter((i) => i >= 0 && i < this.sources.length)
+    const rest = this.sources.map((_, i) => i).filter((i) => !wanted.includes(i))
+    const order = [...wanted, ...rest.sort((a, b) => Math.abs(a - around) - Math.abs(b - around))]
     // a few at a time, so the first pages aren't starved
     let next = 0
     const worker = async () => {
       while (next < order.length && !this.disposed) await this.load(order[next++])
     }
     for (let i = 0; i < 4; i++) void worker()
-    return firstReady.then(() => undefined)
+    // the workers have already started these, so this only waits for them
+    return Promise.all(wanted.map((i) => this.load(i))).then(() => undefined)
   }
 
   private pending = new Map<number, Promise<void>>()

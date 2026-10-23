@@ -107,7 +107,8 @@ export class SpreadEngine implements Engine {
   private current: number
   private flights: Flight[] = []
   private drag: Drag | null = null
-  private press: { x: number; y: number } | null = null
+  // the pointer that started the gesture; other pointers are ignored until it lifts
+  private press: { id: number; x: number; y: number } | null = null
   private hold: Hold | null = null
   private hover = { active: false, x: 0, y: 0 }
   private hovered = -1
@@ -325,6 +326,7 @@ export class SpreadEngine implements Engine {
     el.addEventListener(
       'pointermove',
       (e) => {
+        if (this.press && e.pointerId !== this.press.id) return
         if (this.hold && this.moved(e, this.hold.fired ? HOLD.moveSlopPx : undefined)) this.cancelHold()
         if (this.drag && this.press) {
           if (!interaction.drag) return
@@ -351,13 +353,15 @@ export class SpreadEngine implements Engine {
     el.addEventListener(
       'pointerdown',
       (e) => {
+        // a second finger doesn't take over; a new primary pointer means the old one is gone
+        if (this.press && !e.isPrimary) return
         if (e.button !== 0 || !(interaction.drag || interaction.click || interaction.hold)) return
         const target = this.sheetAt(e.clientX)
         if (!target) return
         const sheet = this.sheets[target.index]
         if (!this.inFlight(target.index)) this.setCurve(sheet, this.curveFor(e.clientX, e.clientY, target.index), true)
         this.flights = this.flights.filter((f) => f.index !== target.index)
-        this.press = { x: e.clientX, y: e.clientY }
+        this.press = { id: e.pointerId, x: e.clientX, y: e.clientY }
         this.drag = {
           index: target.index,
           forward: target.forward,
@@ -389,6 +393,7 @@ export class SpreadEngine implements Engine {
 
     el.addEventListener('pointerup', (e) => this.release(e), { signal })
     el.addEventListener('pointercancel', (e) => this.release(e), { signal })
+    el.addEventListener('lostpointercapture', (e) => this.release(e), { signal })
   }
 
   private moved(e: PointerEvent, slop = DRAG.clickSlopPx) {
@@ -423,7 +428,10 @@ export class SpreadEngine implements Engine {
     )
   }
 
+  // pointercancel and lostpointercapture put the page back; only pointerup completes a turn
   private release(e: PointerEvent) {
+    if (!this.press || e.pointerId !== this.press.id) return
+    const cancelled = e.type !== 'pointerup'
     const wasMoved = this.moved(e)
     this.cancelHold()
     const drag = this.drag
@@ -437,12 +445,12 @@ export class SpreadEngine implements Engine {
 
     // a click turns the page
     if (!wasMoved || !interaction.drag) {
-      if (e.type !== 'pointercancel' && interaction.click) this.fly(drag.index, drag.forward, drag.forward ? 1 : 0)
+      if (!cancelled && interaction.click) this.fly(drag.index, drag.forward, drag.forward ? 1 : 0)
       return
     }
 
     const travelled = drag.forward ? drag.progress - drag.base : drag.base - drag.progress
-    const committed = e.type !== 'pointercancel' && travelled >= this.settings.motion.commitThreshold
+    const committed = !cancelled && travelled >= this.settings.motion.commitThreshold
     const to = drag.forward === committed ? 1 : 0
     this.commit(drag.index, to)
 

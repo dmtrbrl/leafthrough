@@ -204,7 +204,11 @@ export class LeafThroughElement extends BaseElement {
         this.dispatchEvent(new CustomEvent('pageerror', { detail: { error, page }, bubbles: true, composed: true }))
       },
     }
-    if (!pages.length) return
+    if (!pages.length) {
+      this.magazine?.dispose()
+      this.magazine = null
+      return
+    }
     if (this.magazine) this.magazine.setOptions(options)
     else this.magazine = new LeafThrough(this.mount, options)
   }

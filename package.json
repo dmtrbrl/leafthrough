@@ -14,6 +14,7 @@
     "svelte",
     "web-component"
   ],
+  "license": "MIT",
   "homepage": "https://dmtrbrl.github.io/leafthrough/",
   "repository": {
     "type": "git",
