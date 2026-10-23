@@ -1,6 +1,6 @@
 import type { Layout, LeafThroughOptions, PageChangeDetail, PageSource } from 'leafthrough'
 import { DEFAULT_SPREAD_QUERY, resolveSettings } from '../src/options'
-import { generatePages } from './pages'
+import { demoPages } from './pages'
 
 // The dev panel: every option, method and property of the magazine, shared by all the
 // demo pages. Each page wires it to its own binding (React props, Vue props, the Svelte
@@ -33,7 +33,7 @@ export interface Panel {
 }
 
 type DataOptions = Omit<LeafThroughOptions, 'pages' | 'onPageChange' | 'onReady' | 'onError' | 'formatPageLabel'>
-type Source = 'canvas' | 'urls' | 'broken'
+type Source = 'urls' | 'broken'
 type Grain = 'on' | 'off' | 'coarse'
 
 // Everything the panel controls. Plain data, so it fits in the URL.
@@ -46,21 +46,20 @@ interface State {
 }
 
 const INITIAL: State = {
-  options: { startPage: 14, label: 'Foldable, issue 01', interaction: { keyboard: 'global' } },
+  options: { startPage: 0, label: 'LeafThrough / Issue 01', interaction: { keyboard: 'global' } },
 }
 
 // --- state ↔ options ---------------------------------------------------------------
 
 const pageCache = new Map<string, PageSource[]>()
-function pagesFor(count: number, aspect: number, source: Source): PageSource[] {
-  const key = `${count}:${aspect}:${source}`
+function pagesFor(count: number, source: Source): PageSource[] {
+  const key = `${count}:${source}`
   let pages = pageCache.get(key)
   if (!pages) {
-    const canvases = generatePages(count, aspect)
-    pages =
-      source === 'canvas'
-        ? canvases
-        : canvases.map((c, i) => (source === 'broken' && i === 2 ? './missing-page.jpg' : c.toDataURL('image/jpeg', 0.85)))
+    // Repeat the issue only when exercising larger page counts.
+    pages = Array.from({ length: count }, (_, i) =>
+      source === 'broken' && i === 2 ? './missing-page.png' : demoPages[i % demoPages.length],
+    )
     pageCache.set(key, pages)
   }
   return pages
@@ -84,13 +83,12 @@ function coarse() {
 }
 
 function buildOptions(state: State): LeafThroughOptions {
-  const aspect = state.options.pageAspect ?? 1.377
   const paper = { ...state.options.paper }
   if (state.grain) paper.grain = state.grain === 'coarse' ? coarse() : state.grain === 'on'
   return {
     ...state.options,
     paper: Object.keys(paper).length ? paper : undefined,
-    pages: pagesFor(state.pageCount ?? 28, aspect, state.source ?? 'canvas'),
+    pages: pagesFor(state.pageCount ?? demoPages.length, state.source ?? 'urls'),
     formatPageLabel: state.customLabel
       ? ({ visiblePages, pageCount }: PageChangeDetail) =>
           `Now showing ${visiblePages.map((p) => p + 1).join(' and ') || 'nothing'}, ${pageCount} in all`
@@ -178,19 +176,19 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
         {
           label: 'pages (count)',
           kind: 'select',
-          choices: [['28', 28], ['12', 12], ['7 (odd)', 7], ['2', 2]],
+          choices: [['12 (magazine)', 12], ['28 (repeat)', 28], ['7 (odd)', 7], ['2', 2]],
           read: () => state.pageCount,
           write: (v) => (state.pageCount = v as number | undefined),
-          fallback: () => 28,
+          fallback: () => demoPages.length,
         },
         {
           label: 'pages (source)',
-          hint: 'Canvases, image URLs, or URLs with page 3 missing (tests onError)',
+          hint: 'Magazine image URLs, or URLs with page 3 missing (tests onError)',
           kind: 'select',
-          choices: [['canvas', 'canvas'], ['image URLs', 'urls'], ['URLs, one broken', 'broken']],
+          choices: [['image URLs', 'urls'], ['URLs, one broken', 'broken']],
           read: () => state.source,
           write: (v) => (state.source = v as Source | undefined),
-          fallback: () => 'canvas',
+          fallback: () => 'urls',
         },
         option('startPage', 'startPage', 'range', { ...range(0, 27, 1), hint: 'Applies on Remount', defaultValue: 0 }),
         option('pageAspect', 'pageAspect', 'range', range(0.7, 2, 0.01)),
@@ -514,7 +512,8 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   function snippetText() {
     const data: Record<string, unknown> = { ...state.options }
     const lines = [
-      `// ${state.pageCount ?? 28} pages from ${state.source === 'urls' ? 'image URLs' : state.source === 'broken' ? 'image URLs' : 'canvases'}`,
+      `// ${state.pageCount ?? demoPages.length} pages from image URLs`,
+      `const pages = ${JSON.stringify(pagesFor(state.pageCount ?? demoPages.length, state.source ?? 'urls'), null, 2)}`,
     ]
     if (state.grain) setPath(data, 'paper.grain', state.grain === 'coarse' ? '<your grain image>' : state.grain === 'on')
     if (state.customLabel) data.formatPageLabel = '(detail) => …'

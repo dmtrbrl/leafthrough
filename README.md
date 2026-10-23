@@ -145,39 +145,39 @@ The magazine fills the element you give it and keeps its proportions, centred.
 
 ## Options
 
-| Option | Type | Default | |
-| --- | --- | --- | --- |
-| `pages` | `PageSource[]` | **required** | Reading order, front cover first. URL strings, `<img>`, `<canvas>`, `ImageBitmap` or a three.js `Texture`. |
-| `startPage` | `number` | `0` | 0-based page to open at. |
-| `layout` | `'auto' \| 'spread' \| 'single'` | `'auto'` | |
-| `spreadQuery` | `string` | `(min-width: 768px) and (orientation: landscape)` | When `auto` uses the spread layout. |
-| `pageAspect` | `number` | `1.377` | Page height ÷ width. |
-| `loop` | `boolean` | `true` | Single layout: after the last page, close and restart from the cover. |
-| `bleed` | `boolean` | `true` | See [Sizing](#sizing). |
-| `paper` | `PaperOptions` | | See below. |
-| `lighting` | `LightingOptions` | | See below. |
-| `motion` | `MotionOptions` | | See below. |
-| `interaction` | `InteractionOptions` | | See below. |
-| `maxPixelRatio` | `number` | `2` | The canvas is also capped at about 15 megapixels. |
-| `label` | `string` | `'Magazine'` | Accessible name. |
-| `formatPageLabel` | `(detail) => string` | `"Pages 14–15 of 28"` | What screen readers hear when pages change. |
-| `onPageChange` | `(detail) => void` | | Same as the `pagechange` event. |
-| `onReady` | `() => void` | | The first pages are loaded and on screen. |
-| `onError` | `(error, page?) => void` | | A page failed to load. It stays blank paper. |
+| Option            | Type                             | Default                                           |                                                                                                            |
+| ----------------- | -------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `pages`           | `PageSource[]`                   | **required**                                      | Reading order, front cover first. URL strings, `<img>`, `<canvas>`, `ImageBitmap` or a three.js `Texture`. |
+| `startPage`       | `number`                         | `0`                                               | 0-based page to open at.                                                                                   |
+| `layout`          | `'auto' \| 'spread' \| 'single'` | `'auto'`                                          |                                                                                                            |
+| `spreadQuery`     | `string`                         | `(min-width: 768px) and (orientation: landscape)` | When `auto` uses the spread layout.                                                                        |
+| `pageAspect`      | `number`                         | `1.377`                                           | Page height ÷ width.                                                                                       |
+| `loop`            | `boolean`                        | `true`                                            | Single layout: after the last page, close and restart from the cover.                                      |
+| `bleed`           | `boolean`                        | `true`                                            | See [Sizing](#sizing).                                                                                     |
+| `paper`           | `PaperOptions`                   |                                                   | See below.                                                                                                 |
+| `lighting`        | `LightingOptions`                |                                                   | See below.                                                                                                 |
+| `motion`          | `MotionOptions`                  |                                                   | See below.                                                                                                 |
+| `interaction`     | `InteractionOptions`             |                                                   | See below.                                                                                                 |
+| `maxPixelRatio`   | `number`                         | `2`                                               | The canvas is also capped at about 15 megapixels.                                                          |
+| `label`           | `string`                         | `'Magazine'`                                      | Accessible name.                                                                                           |
+| `formatPageLabel` | `(detail) => string`             | `"Pages 14–15 of 28"`                             | What screen readers hear when pages change.                                                                |
+| `onPageChange`    | `(detail) => void`               |                                                   | Same as the `pagechange` event.                                                                            |
+| `onReady`         | `() => void`                     |                                                   | The first pages are loaded and on screen.                                                                  |
+| `onError`         | `(error, page?) => void`         |                                                   | A page failed to load. It stays blank paper.                                                               |
 
 **`paper`**
 
-| | Default | |
-| --- | --- | --- |
-| `grain` | `true` | `false` turns it off. You can also pass a tiling greyscale image or its URL; only its brightest specks show. |
-| `grainScale` | `1.46` | Tiles across a page. |
-| `grainStrength` | `0.17` | How much the grain darkens. |
-| `showThrough` | spread `0.04`, single `0.3` | How much of the other side shows through the paper. |
-| `inkGloss` | `0.33` | How much glossier ink is than bare paper. |
-| `roughness` / `metalness` | `0.5` / `0.17` | |
-| `backColor` | `#fcfcf9` | The blank back of single-layout pages. |
-| `wrinkles` | `1` | Waviness of resting sheets; `0` lays them flat. |
-| `bulge` | `1` | How much pages rise off the spine. |
+|                           | Default                     |                                                                                                              |
+| ------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `grain`                   | `true`                      | `false` turns it off. You can also pass a tiling greyscale image or its URL; only its brightest specks show. |
+| `grainScale`              | `1.46`                      | Tiles across a page.                                                                                         |
+| `grainStrength`           | `0.17`                      | How much the grain darkens.                                                                                  |
+| `showThrough`             | spread `0.04`, single `0.3` | How much of the other side shows through the paper.                                                          |
+| `inkGloss`                | `0.33`                      | How much glossier ink is than bare paper.                                                                    |
+| `roughness` / `metalness` | `0.5` / `0.17`              |                                                                                                              |
+| `backColor`               | `#fcfcf9`                   | Unprinted paper: the blank back of single-layout pages, and transparent parts of page images.                |
+| `wrinkles`                | `1`                         | Waviness of resting sheets; `0` lays them flat.                                                              |
+| `bulge`                   | `1`                         | How much pages rise off the spine.                                                                           |
 
 **`lighting`**: `ambient: { sky, ground, intensity }`, `sun: { color, intensity, position }`,
 `shadows` (default `true`), `shadowMapSize` (default `2048`), and `floorShadow`. That last
@@ -185,16 +185,16 @@ one is the opacity of the shadow under the open spread, default `0.15`.
 
 **`motion`**
 
-| | Default | |
-| --- | --- | --- |
-| `speed` | `1` | Multiplies the speed of every turn. |
-| `dragDistance` | spread `0.8`, single `1.2` | Share of the canvas width that drags a page all the way over. |
-| `commitThreshold` | spread `0.2`, single `0.1` | How far a released drag must have turned to finish turning. |
-| `curl` | `1` | How much a turning page bends. |
-| `maxTilt` | spread `45`, single `35` | Degrees the fold tilts from where you hold it. |
-| `jitter` | `true` | Small random differences, so no two turns look alike. |
-| `hoverLift` | `0.03` | How far a hovered sheet lifts (spread). |
-| `reducedMotion` | `'auto'` | Follows `prefers-reduced-motion`. Reduced motion means quicker turns, no hover lift and no hold-to-riffle. |
+|                   | Default                    |                                                                                                            |
+| ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `speed`           | `1`                        | Multiplies the speed of every turn.                                                                        |
+| `dragDistance`    | spread `0.8`, single `1.2` | Share of the canvas width that drags a page all the way over.                                              |
+| `commitThreshold` | spread `0.2`, single `0.1` | How far a released drag must have turned to finish turning.                                                |
+| `curl`            | `1`                        | How much a turning page bends.                                                                             |
+| `maxTilt`         | spread `45`, single `35`   | Degrees the fold tilts from where you hold it.                                                             |
+| `jitter`          | `true`                     | Small random differences, so no two turns look alike.                                                      |
+| `hoverLift`       | `0.03`                     | How far a hovered sheet lifts (spread).                                                                    |
+| `reducedMotion`   | `'auto'`                   | Follows `prefers-reduced-motion`. Reduced motion means quicker turns, no hover lift and no hold-to-riffle. |
 
 **`interaction`**: `drag`, `click`, `hold` and `hover` all default to `true`. `keyboard`
 defaults to `true` (works while the magazine has focus); set it to `'global'` to listen on
@@ -232,6 +232,9 @@ removing a prop or attribute restores its default.
 
 - **Sources.** Use images in the page aspect (default 1 : 1.377). 1200–1600 px wide is
   plenty.
+- **Transparent artwork.** PNG and WebP alpha is composited onto the paper: transparent
+  areas are unprinted paper in `paper.backColor`, including when the reverse side shows
+  through.
 - **Cross-origin URLs.** URLs on another origin need CORS headers, because the images are
   uploaded to WebGL.
 - **Load order.** Pages load nearest-first, four at a time. Pages that haven't arrived show
@@ -258,6 +261,15 @@ LEAFTHROUGH_DIST=1 npx vite   # run the demo against the built dist/ instead of 
 ```
 
 How it works:
+
+- `demo/pages.ts` exports the image URL array for the twelve-page LeafThrough magazine.
+  Its final PNGs and consolidated `PROMPTS.md` live in `demo/assets/magazine/`.
+  Pastel photographic collages alternate with editorial copy about pages and motion,
+  with a contents page, running headings, and numbered interior footers. Pages 4–5
+  and 8–9 use softer charcoal paper and ivory pencil marks; light pages and covers
+  retain transparency. Each PNG includes its artwork and text, preserving the original
+  varied collage layouts and proportional sans typography. Running headers and footers
+  use exact shared pixel coordinates, documented in `PROMPTS.md` and `alignment.json`.
 
 - `src/spread` and `src/single` hold each layout's engine (simulation and input) and its
   sheet shader.

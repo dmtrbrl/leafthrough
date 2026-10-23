@@ -46,6 +46,9 @@ export class PageLoader {
           return
         }
         texture.colorSpace = THREE.SRGBColorSpace
+        // premultiplied, so filtering at the edge of transparent artwork doesn't pull in the
+        // colour of texels nobody sees (the shader lays the page over the paper colour)
+        texture.premultiplyAlpha = true
         texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
         texture.needsUpdate = true
         this.renderer.initTexture(texture)

@@ -29,6 +29,8 @@ const glslFloat = (n: number) => (Number.isInteger(n) ? `${n}.0` : `${n}`)
 // differences, and the same printed-paper look in the fragment shader.
 function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, settings: ResolvedSettings) {
   const { paper, pageAspect } = settings
+  // in the working (linear) colour space, like the sampled page images
+  const blank = new THREE.Color(paper.backColor)
   const constants = /* glsl */ `
     const float SHEET_ASPECT = ${glslFloat(pageAspect)};
     const float NORMAL_EPSILON = ${glslFloat(shader.epsilon)};
@@ -39,6 +41,7 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
     const float INK_GLOSS = ${glslFloat(paper.inkGloss)};
     const float SHADOW_OFFSET_X = ${glslFloat(shader.shadowOffsetX)};
     const float CONTACT_REACH = 0.04;
+    const vec3 BLANK_PAPER = vec3(${glslFloat(blank.r)}, ${glslFloat(blank.g)}, ${glslFloat(blank.b)});
   `
   const noiseAt = (component: string) => (shader.noise ? `aNoise.${component}` : '0.0')
 
@@ -113,6 +116,10 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
         '#include <map_fragment>',
         `vec4 frontColor = texture2D(uFront, vSheetUv);
         vec4 backColor = texture2D(uBack, vec2(1.0 - vSheetUv.x, vSheetUv.y));
+        // Transparent artwork is unprinted paper, not a hole in the sheet. Page images are
+        // premultiplied, so this is "over" compositing onto the paper colour.
+        frontColor = vec4(frontColor.rgb + BLANK_PAPER * (1.0 - frontColor.a), 1.0);
+        backColor = vec4(backColor.rgb + BLANK_PAPER * (1.0 - backColor.a), 1.0);
         vec4 faceColor = gl_FrontFacing ? frontColor : backColor;
         vec4 otherColor = gl_FrontFacing ? backColor : frontColor;
         // thin paper lets some of the other side through

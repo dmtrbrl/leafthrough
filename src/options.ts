@@ -27,7 +27,10 @@ export interface PaperOptions {
   roughness?: number
   /** A touch of metalness gives the paper its sheen. Default `0.17`. */
   metalness?: number
-  /** Colour of the blank back of single-layout pages. Default `#fcfcf9`. */
+  /**
+   * Colour of unprinted paper: the blank back of single-layout pages, and what shows through
+   * transparent parts of page images. Default `#fcfcf9`.
+   */
   backColor?: ColorRepresentation
   /** Scales the waviness of resting sheets (spread). `0` lays them flat. Default `1`. */
   wrinkles?: number
