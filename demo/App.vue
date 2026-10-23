@@ -37,6 +37,9 @@ const panel = createDevPanel(document.getElementById('panel')!, {
       get visiblePages() {
         return instance.visiblePages
       },
+      get turning() {
+        return instance.turning
+      },
       get layout() {
         return instance.layout
       },

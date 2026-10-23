@@ -28,6 +28,9 @@ const panel = createDevPanel(document.getElementById('panel')!, {
       get visiblePages() {
         return handle.instance?.visiblePages ?? []
       },
+      get turning() {
+        return handle.instance?.turning ?? false
+      },
       get layout() {
         return handle.instance?.layout
       },
@@ -57,4 +60,4 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('stage')!).render(<App />)
+createRoot(document.getElementById('reader-mount')!).render(<App />)

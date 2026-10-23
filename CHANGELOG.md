@@ -6,6 +6,8 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+- `turning`: true while a page is being dragged or is still finishing its turn.
+
 ## [0.1.0]
 
 First release.

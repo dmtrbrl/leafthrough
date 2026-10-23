@@ -6,7 +6,7 @@ import './style.css'
 
 // The panel drives <leaf-through> through its `options` property and its methods;
 // events arrive as DOM events.
-const stage = document.getElementById('stage')!
+const stage = document.getElementById('reader-mount')!
 let element: LeafThroughElement | null = null
 
 function create(options: LeafThroughOptions) {
@@ -42,6 +42,9 @@ const panel = createDevPanel(document.getElementById('panel')!, {
       },
       get visiblePages() {
         return el.instance?.visiblePages ?? []
+      },
+      get turning() {
+        return el.instance?.turning ?? false
       },
     }
   },

@@ -4,7 +4,7 @@ import './style.css'
 
 const element = document.createElement('div')
 element.className = 'magazine'
-document.getElementById('stage')!.append(element)
+document.getElementById('reader-mount')!.append(element)
 
 let magazine: LeafThrough | null = null
 

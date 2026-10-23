@@ -31,6 +31,8 @@ export interface Engine {
   /** Spread: sheets turned to the left. Single: pages turned. */
   readonly position: number
   readonly maxPosition: number
+  /** Whether a page is being dragged or is still completing a turn. */
+  readonly turning: boolean
   /** Which part of the pages takes input: a closed spread only turns from its cover side. */
   readonly activeSide: 'both' | 'right' | 'left'
   /** Advances the simulation; returns true when the frame needs drawing. */
