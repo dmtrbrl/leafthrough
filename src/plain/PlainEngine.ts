@@ -48,6 +48,10 @@ export class PlainEngine implements Engine {
     return false
   }
 
+  pagesInView() {
+    return this.spread ? { from: Math.max(2 * this.current - 1, 0), to: 2 * this.current } : { from: this.current, to: this.current }
+  }
+
   // closed, only the cover side can be clicked
   get activeSide() {
     if (!this.spread) return 'both'

@@ -35,6 +35,11 @@ export interface Engine {
   readonly turning: boolean
   /** Which part of the pages takes input: a closed spread only turns from its cover side. */
   readonly activeSide: 'both' | 'right' | 'left'
+  /**
+   * The pages that can be seen right now, as a range: the ones at rest and any mid-turn. A
+   * quick riffle leaves pages turning well behind the position, and they mustn't unload.
+   */
+  pagesInView(): { from: number; to: number }
   /** Advances the simulation; returns true when the frame needs drawing. */
   update(now: number): boolean
   /** Turns the top page one way; false when there's nothing to turn. */

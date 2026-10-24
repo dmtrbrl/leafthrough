@@ -97,3 +97,38 @@ test('reduced motion turns off hover lift and press and hold', () =>
     expect(settings.motion.hoverLift).toBe(0)
     expect(settings.interaction.hold).toBe(false)
   }))
+
+// eslint-free peek at an engine's sheets
+const sheets = (m: Parameters<typeof internals>[0]) =>
+  (internals(m).view.engine as unknown as { sheets: { mesh: { visible: boolean } }[] }).sheets
+
+test('pages turning back quickly keep the pile under them drawn', () =>
+  withMagazine({ pages: pages(12) }, (m) => {
+    m.goTo(8)
+    internals(m).frame(performance.now())
+    for (let i = 0; i < 5; i++) m.prev()
+    internals(m).frame(performance.now() + 200)
+    // page 8 is still the top of the pile while 3–7 fly back over it
+    expect(sheets(m)[8].mesh.visible).toBe(true)
+  }))
+
+test('pages still turning in a quick run of turns stay loaded', () =>
+  withMagazine({ layout: 'spread', pages: pages(28) }, async (m) => {
+    const { loader } = internals(m)
+    expect(loader.textures[0]).toBeDefined()
+    for (let i = 0; i < 12; i++) m.next()
+    internals(m).frame(performance.now() + 100)
+    // the first sheet is still in the air, far behind the position
+    expect(loader.textures[0]).toBeDefined()
+    expect(loader.textures[1]).toBeDefined()
+  }))
+
+test('read pages stay loaded while they show on the roll', () =>
+  withMagazine({ pages: pages(28) }, async (m) => {
+    m.goTo(27)
+    internals(m).frame(performance.now())
+    await pause(300)
+    internals(m).frame(performance.now())
+    // more than twice the preload distance behind, but still rolled up behind the magazine
+    expect(internals(m).loader.textures[13]).toBeDefined()
+  }))

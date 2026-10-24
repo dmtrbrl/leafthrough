@@ -137,9 +137,10 @@ export interface LeafThroughOptions {
   /** Upper limit for the canvas pixel ratio. Default `2`. */
   maxPixelRatio?: number
   /**
-   * How many pages either side of the visible ones to load ahead. Pages more than twice as
-   * far away are unloaded, which frees their memory. `Infinity` loads and keeps every page.
-   * Default `6`.
+   * How many pages either side of the visible ones to load ahead. Visible means on screen:
+   * pages mid-turn count, and in `single` so do read pages still rolled up behind the magazine.
+   * Pages more than twice as far away are unloaded, which frees their memory. `Infinity` loads
+   * and keeps every page. Default `6`.
    */
   preload?: number
   /**

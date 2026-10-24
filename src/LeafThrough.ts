@@ -581,6 +581,7 @@ export class LeafThrough extends EventTarget {
       onError: (page, error) => this.fail(error, page),
     })
     this.loader = loader
+    this.inView = ''
     this.resetReady()
     // the pages around the start, so the first turn either way has its next page ready
     const first = [around - 1, around, around + 1, around + 2]
@@ -590,6 +591,18 @@ export class LeafThrough extends EventTarget {
       this.ready = true
       this.needsRender = true
     })
+  }
+
+  // loads around what's on screen, pages mid-turn included, the page being read first
+  private inView = ''
+  private followReader(engine: Engine, layout: Layout) {
+    if (!this.loader) return
+    const { from, to } = engine.pagesInView()
+    const around = this.pagesAt(engine.position, layout)[0] ?? to
+    const key = `${from}:${to}:${around}`
+    if (key === this.inView) return
+    this.inView = key
+    this.loader.focus(from, to, around)
   }
 
   private resetReady() {
@@ -645,8 +658,6 @@ export class LeafThrough extends EventTarget {
     const first = !this.lastDetailKey
     this.lastDetailKey = key
     this.live.textContent = (this.options.formatPageLabel ?? defaultPageLabel)(detail)
-    const { visiblePages: visible } = detail
-    this.loader?.focus(visible[0] ?? detail.page, visible[visible.length - 1] ?? detail.page)
     if (first) return
     this.options.onPageChange?.(detail)
     this.dispatchEvent(new CustomEvent('pagechange', { detail }))
@@ -763,6 +774,7 @@ export class LeafThrough extends EventTarget {
     if (!view) return
     this.stepRiffle(now, view.engine)
     const moved = view.engine.update(now)
+    this.followReader(view.engine, view.settings.layout)
     if (view.engine.activeSide !== this.hitSide) this.placeHitArea()
     if (moved || this.needsRender) {
       if (this.renderer && view.scene && view.camera) {

@@ -74,6 +74,14 @@ test('a looping magazine keeps the cover close to the last page', () => {
   loader.dispose()
 })
 
+test('of the pages in view, the one being read loads first', () => {
+  const loader = new PageLoader(urls(12), renderer, 0, quiet())
+  void loader.start(9, 9, [])
+  loader.focus(0, 9, 9)
+  expect(requested()).toEqual(['page9.png', 'page8.png', 'page7.png', 'page6.png'])
+  loader.dispose()
+})
+
 test('pages left far behind are unloaded and freed', async () => {
   window.Image = OriginalImage
   const events = quiet()
@@ -141,12 +149,13 @@ test('the magazine reports each page as it loads', async () => {
 
 test('preload keeps only the pages near the reader', async () => {
   window.Image = OriginalImage
-  await withMagazine({ pages: pages(40), preload: 2 }, async (m) => {
+  await withMagazine({ layout: 'spread', pages: pages(40), preload: 2 }, async (m) => {
     const loaded = () => internals(m).loader.textures.flatMap((texture, i) => (texture ? [i] : []))
     expect(loaded()).toEqual([0, 1, 2])
     m.goTo(30)
     internals(m).frame(performance.now())
     await pause()
-    expect(loaded()).toEqual([28, 29, 30, 31, 32])
+    // pages 29 and 30 show, and two either side
+    expect(loaded()).toEqual([27, 28, 29, 30, 31, 32])
   })
 })

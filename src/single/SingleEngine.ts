@@ -130,6 +130,7 @@ export class SingleEngine implements Engine {
   private readonly abort = new AbortController()
 
   private current: number
+  private turned = 0 // sum of every sheet's progress, as of the last update
   private flights: Flight[] = []
   private drag: Drag | null = null
   // the pointer that started the gesture; other pointers are ignored until it lifts
@@ -215,6 +216,25 @@ export class SingleEngine implements Engine {
   }
 
   readonly activeSide = 'both'
+
+  pagesInView() {
+    // read pages stay on the roll, their corners showing, until they settle under the pile
+    const settled = Math.floor(this.paced(this.turned) - 1 - this.fallDelay - this.fallDuration)
+    let from = clamp(settled + 1, 0, Math.max(this.current - 1, 0))
+    let to = Math.max(Math.min(this.current, this.count - 1), this.pileTop()?.index ?? 0)
+    const turning = this.flights.map((flight) => flight.sheet)
+    if (this.drag) turning.push(this.drag.sheet)
+    for (const sheet of turning) {
+      from = Math.min(from, sheet.index)
+      to = Math.max(to, sheet.index)
+    }
+    return { from, to: Math.max(from, to) }
+  }
+
+  // the page on top of the pile, the one a turning page reveals
+  private pileTop() {
+    return this.sheets.find((sheet) => sheet.index >= this.current && !this.busy(sheet))
+  }
 
   setPageTexture(page: number, texture: THREE.Texture) {
     const sheet = this.sheets[page]
@@ -610,18 +630,21 @@ export class SingleEngine implements Engine {
 
     let turned = 0
     for (const sheet of this.sheets) turned += sheet.progress
+    this.turned = turned
     const edge = this.pileEdge(turned)
-    // the page on top of the pile, the one a turning page reveals
-    const top = this.sheets.find((sheet) => sheet.index >= this.current && !this.busy(sheet))
+    const top = this.pileTop()
     for (const sheet of this.sheets) {
       this.applyUniforms(sheet, turned, edge)
       sheet.uniforms.uTrim.value.set(sheet === top || this.busy(sheet) ? 0 : 1, edge.bottom, edge.top)
     }
 
     const closing = this.closing(turned) > 0
+    // Pages turning back can run well ahead of the position, so the pile is drawn down from its
+    // top, the page they're settling onto, rather than from the position.
+    const pileFrom = Math.max(this.current, top?.index ?? this.current)
     for (const sheet of this.sheets) {
       const i = sheet.index
-      sheet.mesh.visible = closing || i <= this.current + PILE.renderDepth || this.busy(sheet)
+      sheet.mesh.visible = closing || i <= pileFrom + PILE.renderDepth || this.busy(sheet)
       layerSheet(sheet.mesh, i < this.current ? this.current - 1 - i : i - this.current, this.count, this.busy(sheet))
     }
 

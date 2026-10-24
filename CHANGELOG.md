@@ -6,6 +6,18 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.1]
+
+- Pages still turning in a quick riffle no longer unload and show blank paper. Loading now
+  follows what's on screen, not just the page being read, which mattered in magazines of more
+  than about a dozen pages.
+- Single layout: turning pages back quickly no longer hides the pile under them, which let the
+  floor or the cover show through where the current page should be.
+- Single layout: read pages rolled up behind the magazine stay loaded until they settle under
+  the pile, so their corners don't turn to blank paper.
+- Of the pages on screen, the one being read loads first.
+- `preload` counts from every page on screen, mid-turn and rolled-up ones included.
+
 ## [0.1.0]
 
 First release.
