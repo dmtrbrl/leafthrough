@@ -204,7 +204,7 @@ one is the opacity of the shadow under the open spread, default `0.15`.
 | `maxTilt`         | spread `45`, single `35`   | Degrees the fold tilts from where you hold it.                                                             |
 | `jitter`          | `true`                     | Small random differences, so no two turns look alike.                                                      |
 | `hoverLift`       | `0.03`                     | How far a hovered sheet lifts (spread).                                                                    |
-| `reducedMotion`   | `'auto'`                   | Follows `prefers-reduced-motion`. Reduced motion means quicker turns, no hover lift and no hold-to-riffle. |
+| `reducedMotion`   | `'auto'`                   | Follows `prefers-reduced-motion`. Reduced motion drops the hover lift and the random wobble; turns and hold-to-riffle work as usual. |
 
 **`interaction`**: `drag`, `click`, `hold` and `hover` all default to `true`. `keyboard`
 defaults to `true` (works while the magazine has focus); set it to `'global'` to listen on

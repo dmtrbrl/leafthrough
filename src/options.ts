@@ -79,8 +79,9 @@ export interface MotionOptions {
   /** How far a hovered sheet lifts, as a share of a turn (spread). `0` disables. Default `0.03`. */
   hoverLift?: number
   /**
-   * `'auto'` follows the user's `prefers-reduced-motion`. When reduced, turns are quicker and
-   * hovering doesn't lift pages. Default `'auto'`.
+   * `'auto'` follows the user's `prefers-reduced-motion`. When reduced, the decorative motion
+   * goes: hovered pages don't lift and turns don't wobble at random. Turns themselves keep their
+   * speed, and press and hold still riffles. Default `'auto'`.
    */
   reducedMotion?: 'auto' | boolean
 }
@@ -235,19 +236,19 @@ export function resolveSettings(options: LeafThroughOptions, layout: Layout, pre
       floorShadow: lighting.floorShadow ?? 0.15,
     },
     motion: {
-      speed: Math.max(0.05, (motion.speed ?? 1) * (reduced ? 2.5 : 1)),
+      speed: Math.max(0.05, motion.speed ?? 1),
       dragDistance: motion.dragDistance ?? (spread ? 0.8 : 1.2),
       commitThreshold: motion.commitThreshold ?? (spread ? 0.2 : 0.1),
       curl: motion.curl ?? 1,
       maxTilt: motion.maxTilt ?? (spread ? 45 : 35),
-      jitter: motion.jitter ?? true,
+      jitter: reduced ? false : (motion.jitter ?? true),
       hoverLift: reduced ? 0 : (motion.hoverLift ?? 0.03),
       reduced,
     },
     interaction: {
       drag: interaction.drag ?? true,
       click: interaction.click ?? true,
-      hold: (interaction.hold ?? true) && !reduced,
+      hold: interaction.hold ?? true,
       hover: interaction.hover ?? true,
       keyboard: interaction.keyboard ?? true,
     },
