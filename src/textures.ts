@@ -27,6 +27,8 @@ export class PageLoader {
   // the visible pages
   private from = 0
   private to = 0
+  // whether the magazine loops, putting the cover right after the last page
+  private wrap = false
   private waiting = new Set<number>()
   private settleFirst: () => void = () => {}
   private disposed = false
@@ -77,6 +79,12 @@ export class PageLoader {
     this.pump()
   }
 
+  setWrap(wrap: boolean) {
+    if (wrap === this.wrap) return
+    this.wrap = wrap
+    this.focus(this.from, this.to)
+  }
+
   setRadius(radius: number) {
     this.radius = radius
     this.focus(this.from, this.to)
@@ -97,7 +105,10 @@ export class PageLoader {
 
   // pages away from the visible ones
   private distance(page: number) {
-    return page < this.from ? this.from - page : page > this.to ? page - this.to : 0
+    const straight = page < this.from ? this.from - page : page > this.to ? page - this.to : 0
+    if (!this.wrap) return straight
+    const count = this.sources.length
+    return Math.min(straight, page + count - this.to, this.from + count - page)
   }
 
   // starts the most wanted pages while there's room

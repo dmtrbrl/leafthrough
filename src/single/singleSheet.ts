@@ -109,6 +109,18 @@ const vertexChunk = /* glsl */ `
   }
 `
 
+const fragmentChunk = /* glsl */ `
+  uniform vec3 uTrim; // x: whether to trim, y/z: the top page's right edge at its bottom/top
+
+  // Right of the spine, a page under the top one only shows where the top page is: whatever
+  // reaches past its right or bottom edge is trimmed away.
+  bool sheetHidden(vec3 p) {
+    if (uTrim.x < 0.5 || p.x <= 0.0) return false;
+    float row = clamp(p.y / SHEET_ASPECT + 0.5, 0.0, 1.0);
+    return p.x > mix(uTrim.y, uTrim.z, row) || p.y < -0.5 * SHEET_ASPECT;
+  }
+`
+
 export function createSingleGeometry(aspect: number): THREE.BufferGeometry {
   return new THREE.PlaneGeometry(1, aspect, 64, Math.round(64 * aspect))
 }
@@ -121,6 +133,7 @@ export interface SingleSheetUniforms extends SheetUniforms {
   uTailBend: THREE.IUniform<number>
   uCone: THREE.IUniform<THREE.Vector3>
   uFlipRotation: THREE.IUniform<THREE.Vector2>
+  uTrim: THREE.IUniform<THREE.Vector3>
   uFront: THREE.IUniform<THREE.Texture>
   uBack: THREE.IUniform<THREE.Texture>
   uPattern: THREE.IUniform<THREE.Texture>
@@ -144,6 +157,7 @@ export function createSingleSheet(
     uTailBend: { value: 0 },
     uCone: { value: new THREE.Vector3(0, 1, 0) },
     uFlipRotation: { value: new THREE.Vector2(1, 0) },
+    uTrim: { value: new THREE.Vector3(0, 1, 1) },
     uFront: { value: front },
     uBack: { value: back },
     uPattern: { value: pattern },
@@ -153,7 +167,7 @@ export function createSingleSheet(
   const mesh = createSheetMesh(
     geometry,
     uniforms,
-    { vertexChunk, epsilon: NORMAL_EPSILON, shadowOffsetX: -0.004 },
+    { vertexChunk, fragmentChunk, epsilon: NORMAL_EPSILON, shadowOffsetX: -0.004 },
     settings,
   )
   return { mesh, uniforms }

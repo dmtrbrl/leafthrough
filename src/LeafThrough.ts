@@ -377,6 +377,7 @@ export class LeafThrough extends EventTarget {
     this.canvas.style.display = 'block'
     this.content.place(null)
     if (!this.loader) this.loadPages(renderer, page, layout)
+    this.loader?.setWrap(layout === 'single' && settings.loop)
     const framing = framingFor(layout, settings.pageAspect)
     const { drag, click, hold } = settings.interaction
     this.hitArea.style.cursor = drag ? 'grab' : click || hold ? 'pointer' : 'default'
@@ -503,14 +504,17 @@ export class LeafThrough extends EventTarget {
 
     // A bleeding view can reach past the edges of the page; past the sides that would
     // add a horizontal scrollbar, so the canvas stops at the document's edges and the
-    // camera renders just that part of the view.
+    // camera renders just that part of the view. The edges are measured in the element's own
+    // pixels, which a CSS transform on the container (say, a scale) makes differ from the screen's.
     const root = element.getBoundingClientRect()
+    const scaleX = root.width / element.offsetWidth || 1
+    const scaleY = root.height / element.offsetHeight || 1
     const pageLeft = root.left + window.scrollX
     const pageTop = root.top + window.scrollY
     const documentWidth = document.documentElement.clientWidth
-    const left = Math.max(placed.view.x, -pageLeft)
-    const right = Math.min(placed.view.x + placed.view.width, documentWidth - pageLeft)
-    const top = Math.max(placed.view.y, -pageTop)
+    const left = Math.max(placed.view.x, -pageLeft / scaleX)
+    const right = Math.min(placed.view.x + placed.view.width, (documentWidth - pageLeft) / scaleX)
+    const top = Math.max(placed.view.y, -pageTop / scaleY)
     const bottom = placed.view.y + placed.view.height
     const canvas = { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) }
 

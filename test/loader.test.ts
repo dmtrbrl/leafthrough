@@ -66,6 +66,14 @@ test('a jump aborts requests for pages no longer needed', () => {
   loader.dispose()
 })
 
+test('a looping magazine keeps the cover close to the last page', () => {
+  const loader = new PageLoader(urls(30), renderer, 1, quiet())
+  void loader.start(29, 29, [28, 29])
+  loader.setWrap(true)
+  expect(requested()).toEqual(['page28.png', 'page29.png', 'page0.png'])
+  loader.dispose()
+})
+
 test('pages left far behind are unloaded and freed', async () => {
   window.Image = OriginalImage
   const events = quiet()

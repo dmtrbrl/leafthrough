@@ -7,6 +7,14 @@ All notable changes to this package. The format follows
 ## [Unreleased]
 
 - `turning`: true while a page is being dragged or is still finishing its turn.
+- Single layout: magazines shorter than about 24 pages now close after the last page without
+  the pile jumping up, and the roll is fully open and even on the last page, as in longer ones.
+- A looping magazine keeps the cover loaded near the last page, so it doesn't come back blank.
+- A container scaled with a CSS transform no longer crops turning pages at the screen's edge.
+- Single layout: nothing shows past the right or bottom edge of the page in view; pages under
+  it, or settling back under the pile, used to show a sliver of their print there.
+- The built-in paper grain is a fine, even speckle, closer to printed paper, instead of a
+  cloudy one.
 
 ## [0.1.0]
 
