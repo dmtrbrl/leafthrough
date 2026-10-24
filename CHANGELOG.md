@@ -6,6 +6,11 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.2]
+
+- `maxPixelRatio` defaults to `3` instead of `2`, so pages are drawn at full sharpness on
+  3× phone screens. Set it back to `2` to draw fewer pixels on those screens.
+
 ## [0.1.1]
 
 - Pages still turning in a quick riffle no longer unload and show blank paper. Loading now

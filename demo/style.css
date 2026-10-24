@@ -55,12 +55,11 @@ nav a[aria-current="page"] { color: var(--charcoal-dark); background: var(--glas
 .stage-guide p { max-width: 30ch; margin: 0; line-height: 1.45; }
 .stage-guide-primary { color: #596057; font-size: 16px; font-weight: 520; }
 .stage-guide .stage-guide-secondary { margin-top: 6px; color: #646b62; font-size: 13px; }
-/* The single layout keeps room above and below its page for turning (it fits 2.4 units of
-   height round a 1.377 page). On desktop the magazine reaches past the mount by that room, so
-   the page is as tall as the spread's, drawn at full resolution rather than scaled up. */
-@media (min-width: 901px) {
-  .stage[data-layout="single"] .magazine { position: absolute; inset: -37.15% 0; height: auto; }
-}
+/* The single layout keeps room round its page for turning: it fits a box 1.56 pages wide and
+   2.4 page widths tall, with the spine 0.34 pages in. The magazine is sized round the page, so
+   the page is as large as the mount allows and drawn at full resolution rather than scaled up. */
+.reader-mount { container-type: size; }
+.stage[data-layout="single"] .magazine { --page: min(100cqh / 1.377, 82cqw); position: absolute; left: calc(50cqw - .84 * var(--page)); top: calc(50cqh - 1.2 * var(--page)); width: calc(1.56 * var(--page)); height: calc(2.4 * var(--page)); }
 @media (min-width: 901px) and (max-width: 1199px) {
   .stage-guide { width: min(39%, 410px); }
   .stage-guide p { max-width: none; }
@@ -169,24 +168,19 @@ nav a[aria-current="page"] { color: var(--charcoal-dark); background: var(--glas
   .github span, .code-toggle span, .settings-toggle span { display: none; }
   .header-icon, .code-toggle svg { width: 20px; height: 20px; }
   .workspace { min-height: 0; overflow-x: clip; }
-  .stage { grid-template-rows: minmax(0, 1fr); padding: calc(var(--header-height) + 16px) 5vw 16px; }
-  .stage[data-layout="single"] .magazine { transform: translateX(-4vw) scale(1.28); transform-origin: center; }
+  .stage { grid-template-rows: minmax(0, 1fr) auto; padding: calc(var(--header-height) + 16px) 5vw 16px; }
   .stage-guide { top: calc(var(--header-height) + 20px); left: 20px; width: calc(100% - 64px); margin: -8px 0 0 -12px; padding: 8px 36px 8px 12px; border-radius: 10px; transform: none; }
   .stage-guide-close { top: 4px; right: 4px; }
   .stage-guide.is-hidden { opacity: 1; visibility: visible; transition: none; }
   .stage-guide p { max-width: none; }
   .stage-guide-primary { font-size: 12px; }
   .stage-guide .stage-guide-secondary { margin-top: 1px; font-size: 11px; }
-  .stage-nav { position: absolute; bottom: 12svh; left: 50%; margin: 0; transform: translateX(-50%); }
+  .stage-nav { margin-top: 12px; }
   .panel { border-left: 0; }
   .settings-open .workspace { display: block; }
   .settings-open .stage { display: none; }
   .settings-open .panel { height: 100%; }
   .dev-panel > .panel-intro .close-settings { width: 44px; height: 44px; min-height: 44px; }
-}
-
-@media (min-width: 601px) and (max-width: 900px) {
-  .stage[data-layout="single"] .magazine { transform: none; }
 }
 
 @media (min-width: 901px) and (max-width: 1100px) and (orientation: portrait) {
@@ -202,19 +196,13 @@ nav a[aria-current="page"] { color: var(--charcoal-dark); background: var(--glas
 }
 
 @media (max-width: 900px) and (max-height: 700px) {
-  .stage[data-layout="single"] .magazine { transform: translateX(-4vw) scale(1.17); }
-  .stage-nav { bottom: 8svh; margin-top: 0; }
+  .stage-nav { margin-top: 4px; }
 }
 
 @media (max-width: 360px) {
   header { gap: 6px; padding: 8px 10px; }
   .brand { gap: 6px; font-size: 14px; }
   .brand img { width: 24px; height: 24px; }
-}
-
-@media (max-width: 360px) and (max-height: 620px) {
-  .stage[data-layout="single"] .magazine { transform: translate(-4vw, 20px) scale(1.06); }
-  .stage-nav { bottom: 2svh; }
 }
 
 @media (prefers-reduced-motion: reduce) {

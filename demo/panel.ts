@@ -266,7 +266,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
         option('loop', 'Loop at the end', 'toggle', { hint: 'Single layout: restart after the last page.' }),
         option('bleed', 'Allow page overhang', 'toggle'),
         option('plain', 'Flat page mode', 'toggle', { hint: 'Show flat pages without 3D.', defaultValue: false }),
-        option('maxPixelRatio', 'Maximum pixel ratio', 'range', range(0.5, 3, 0.25)),
+        option('maxPixelRatio', 'Maximum pixel ratio', 'range', range(0.5, 4, 0.25)),
       ],
     },
     {
