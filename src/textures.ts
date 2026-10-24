@@ -24,9 +24,10 @@ export class PageLoader {
   private readonly failed = new Set<number>()
   // `first` pages load before the rest; the rest go nearest first
   private first: number[] = []
-  // the visible pages
+  // the pages in view, and the one being read, which loads first among them
   private from = 0
   private to = 0
+  private around = 0
   // whether the magazine loops, putting the cover right after the last page
   private wrap = false
   private waiting = new Set<number>()
@@ -57,11 +58,15 @@ export class PageLoader {
     return ready
   }
 
-  /** Follows the reader: loads around the visible pages and unloads pages left far behind. */
-  focus(from: number, to = from) {
+  /**
+   * Follows the reader: loads around the pages in view (`from`–`to`), the page being read
+   * (`around`) first, and unloads pages left far behind.
+   */
+  focus(from: number, to = from, around = from) {
     if (this.disposed) return
     this.from = from
     this.to = to
+    this.around = around
     const keep = 2 * this.radius
     for (const [i, request] of this.inFlight) {
       if (this.distance(i) <= keep) continue
@@ -82,12 +87,12 @@ export class PageLoader {
   setWrap(wrap: boolean) {
     if (wrap === this.wrap) return
     this.wrap = wrap
-    this.focus(this.from, this.to)
+    this.focus(this.from, this.to, this.around)
   }
 
   setRadius(radius: number) {
     this.radius = radius
-    this.focus(this.from, this.to)
+    this.focus(this.from, this.to, this.around)
   }
 
   /** Loads the pages that failed again. */
@@ -118,7 +123,9 @@ export class PageLoader {
       !this.textures[i] && !this.inFlight.has(i) && !this.failed.has(i) && this.distance(i) <= this.radius
     const queue = [
       ...this.first.filter((i) => this.waiting.has(i)),
-      ...this.sources.map((_, i) => i).sort((a, b) => this.distance(a) - this.distance(b)),
+      ...this.sources
+        .map((_, i) => i)
+        .sort((a, b) => this.distance(a) - this.distance(b) || Math.abs(a - this.around) - Math.abs(b - this.around)),
     ]
     for (const page of queue) {
       if (this.inFlight.size >= CONCURRENCY) return

@@ -166,7 +166,7 @@ The magazine fills the element you give it and keeps its proportions, centred.
 | `motion`          | `MotionOptions`                  |                                                   | See below.                                                                                                 |
 | `interaction`     | `InteractionOptions`             |                                                   | See below.                                                                                                 |
 | `maxPixelRatio`   | `number`                         | `2`                                               | The canvas is also capped at about 15 megapixels.                                                          |
-| `preload`         | `number`                         | `6`                                               | Pages either side of the visible ones to load ahead. Pages twice as far away unload. `Infinity` keeps all. |
+| `preload`         | `number`                         | `6`                                               | Pages either side of the visible ones (mid-turn and rolled-up ones included) to load ahead. Pages twice as far away unload. `Infinity` keeps all. |
 | `plain`           | `boolean`                        | `false`                                           | Flat pages without 3D. Used by itself when the browser can't run WebGL.                                    |
 | `label`           | `string`                         | `'Magazine'`                                      | Accessible name.                                                                                           |
 | `formatPageLabel` | `(detail) => string`             | `"Pages 14–15 of 28"`                             | What screen readers hear when pages change.                                                                |
@@ -274,6 +274,8 @@ pages: [
   the reader as they turn or jump. Pages that haven't arrived show blank paper.
 - **Memory.** Pages within `preload` of the visible ones load; pages more than twice that
   far away unload, freeing their GPU memory, and load again when the reader comes back.
+  Visible means anything on screen: pages still turning in a quick riffle, and in `single`
+  the read pages rolled up behind the magazine, until they settle under the pile.
   A texture you pass in yourself stays loaded, since it's yours.
 - **Failures.** A page that fails stays blank paper and is reported through `onError`.
   `retry()` loads failed pages again, and so does the browser coming back online.

@@ -166,6 +166,18 @@ export class SpreadEngine implements Engine {
     return this.flights.length > 0 || this.drag !== null
   }
 
+  pagesInView() {
+    // sheet i carries pages 2i (front) and 2i + 1 (back)
+    let from = Math.max(2 * this.current - 1, 0)
+    let to = 2 * this.current
+    for (const sheet of this.sheets) {
+      if (sheet.progress <= 0 || sheet.progress >= 1) continue
+      from = Math.min(from, 2 * sheet.index)
+      to = Math.max(to, 2 * sheet.index + 1)
+    }
+    return { from, to }
+  }
+
   // closed, only the cover side can be grabbed
   get activeSide() {
     const busy = this.flights.length > 0 || this.drag !== null || this.hold !== null
