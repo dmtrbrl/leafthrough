@@ -1,16 +1,40 @@
 import * as THREE from 'three'
 
-// A tiling paper grain: cloudy pulp plus short fibres. The sheet shader only cares about
-// the brightest bits (pow 7), which come out as faint darker fibres and rougher spots.
+// A tiling paper grain, modelled on a scan of fine paper: nearly all of it is pixel-sized
+// speckle, each speck a little like its neighbours and a little unlike the ones two along,
+// with only a trace of cloudiness. The sheet shader only cares about the brightest bits
+// (pow 7), which come out as faint darker flecks and rougher spots.
 const SIZE = 384
+// filters white noise into the speckle; one quadrant, [y][x], mirrored for the others
+const KERNEL = [
+  [1, 0.108, -0.049, 0.022],
+  [0.131, 0.016, -0.014, 0.008],
+  [-0.039, -0.018, 0, 0.009],
+  [0.021, 0.005, 0.004, 0.009],
+]
+// the cloudiness, as a share of the speckle's spread
+const CLOUD = 0.07
+const CLOUD_PERIOD = 32
+// how bright the grain is: [share of pixels darker, level]
+const LEVELS = [
+  [0, 0.537],
+  [0.001, 0.624],
+  [0.01, 0.675],
+  [0.05, 0.714],
+  [0.1, 0.733],
+  [0.25, 0.761],
+  [0.5, 0.788],
+  [0.75, 0.816],
+  [0.9, 0.835],
+  [0.95, 0.847],
+  [0.99, 0.867],
+  [0.999, 0.89],
+  [1, 0.914],
+]
 
-function periodicNoise(period: number, seed: number) {
+function periodicNoise(period: number, random: () => number) {
   const grid = new Float32Array(period * period)
-  let s = seed >>> 0
-  for (let i = 0; i < grid.length; i++) {
-    s = (s * 1664525 + 1013904223) >>> 0
-    grid[i] = s / 4294967296
-  }
+  for (let i = 0; i < grid.length; i++) grid[i] = random()
   const at = (x: number, y: number) => grid[((y % period) + period) % period * period + (((x % period) + period) % period)]
   return (x: number, y: number) => {
     const xi = Math.floor(x)
@@ -25,58 +49,65 @@ function periodicNoise(period: number, seed: number) {
   }
 }
 
+function spread(values: Float32Array) {
+  let mean = 0
+  for (const v of values) mean += v
+  mean /= values.length
+  let variance = 0
+  for (const v of values) variance += (v - mean) ** 2
+  return Math.sqrt(variance / values.length) || 1
+}
+
 export function createPaperPattern(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
+  let s = 7
+  const random = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
+
+  const noise = new Float32Array(SIZE * SIZE)
+  for (let i = 0; i < noise.length; i++) {
+    noise[i] = Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random())
+  }
+  const at = (x: number, y: number) => noise[((y + SIZE) % SIZE) * SIZE + ((x + SIZE) % SIZE)]
+
+  // speckle, wrapped at the edges so the tile stays seamless
+  const reach = KERNEL.length - 1
+  const grain = new Float32Array(SIZE * SIZE)
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      let v = 0
+      for (let dy = -reach; dy <= reach; dy++) {
+        const row = KERNEL[Math.abs(dy)]
+        for (let dx = -reach; dx <= reach; dx++) v += row[Math.abs(dx)] * at(x + dx, y + dy)
+      }
+      grain[y * SIZE + x] = v
+    }
+  }
+
+  const cloudNoise = periodicNoise(CLOUD_PERIOD, random)
+  const cloud = new Float32Array(SIZE * SIZE)
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) cloud[y * SIZE + x] = cloudNoise((x / SIZE) * CLOUD_PERIOD, (y / SIZE) * CLOUD_PERIOD)
+  }
+  const cloudScale = (CLOUD * spread(grain)) / spread(cloud)
+  for (let i = 0; i < grain.length; i++) grain[i] += cloud[i] * cloudScale
+
+  // keep the pattern, take the brightness from LEVELS
+  const order = Array.from(grain.keys()).sort((a, b) => grain[a] - grain[b])
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = SIZE
   const ctx = canvas.getContext('2d')!
   const image = ctx.createImageData(SIZE, SIZE)
-
-  const octaves = [4, 8, 16, 32, 96].map((period, i) => ({ period, noise: periodicNoise(period, 11 + i * 17) }))
-  const weights = [0.5, 0.25, 0.14, 0.08, 0.05]
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      let v = 0
-      octaves.forEach(({ period, noise }, i) => {
-        v += weights[i] * noise((x / SIZE) * period, (y / SIZE) * period)
-      })
-      const g = Math.round(255 * (0.8 + (v - 0.5) * 0.42))
-      const o = (y * SIZE + x) * 4
-      image.data[o] = image.data[o + 1] = image.data[o + 2] = g
-      image.data[o + 3] = 255
-    }
-  }
+  let level = 1
+  order.forEach((pixel, rank) => {
+    const share = rank / (order.length - 1)
+    while (LEVELS[level][0] < share) level++
+    const [fromShare, from] = LEVELS[level - 1]
+    const [toShare, to] = LEVELS[level]
+    const g = Math.round(255 * (from + ((to - from) * (share - fromShare)) / (toShare - fromShare)))
+    const o = pixel * 4
+    image.data[o] = image.data[o + 1] = image.data[o + 2] = g
+    image.data[o + 3] = 255
+  })
   ctx.putImageData(image, 0, 0)
-
-  // fibres, drawn wrapped so the tile stays seamless
-  let s = 7
-  const random = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
-  ctx.lineCap = 'round'
-  for (let i = 0; i < 2600; i++) {
-    const x = random() * SIZE
-    const y = random() * SIZE
-    const angle = random() * Math.PI * 2
-    const length = 3 + random() * 14
-    const bend = (random() - 0.5) * length * 0.8
-    const light = random() < 0.65
-    ctx.strokeStyle = light ? `rgba(255,255,255,${0.08 + random() * 0.22})` : `rgba(0,0,0,${0.03 + random() * 0.08})`
-    ctx.lineWidth = 0.5 + random() * 0.9
-    for (const ox of [-SIZE, 0, SIZE]) {
-      for (const oy of [-SIZE, 0, SIZE]) {
-        const ax = x + ox
-        const ay = y + oy
-        if (ax < -20 || ax > SIZE + 20 || ay < -20 || ay > SIZE + 20) continue
-        ctx.beginPath()
-        ctx.moveTo(ax, ay)
-        ctx.quadraticCurveTo(
-          ax + Math.cos(angle) * length * 0.5 - Math.sin(angle) * bend,
-          ay + Math.sin(angle) * length * 0.5 + Math.cos(angle) * bend,
-          ax + Math.cos(angle) * length,
-          ay + Math.sin(angle) * length,
-        )
-        ctx.stroke()
-      }
-    }
-  }
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping

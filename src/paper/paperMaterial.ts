@@ -14,6 +14,8 @@ export interface SheetShading {
 export interface SheetShader {
   /** GLSL defining `vec3 sheetPosition(vec2 uv, float noise)` and its uniforms. */
   vertexChunk: string
+  /** GLSL defining `bool sheetHidden(vec3 p)` and its uniforms: true where not to draw. */
+  fragmentChunk?: string
   /** Finite difference step for normals, in page widths. */
   epsilon: number
   /** Read per-vertex noise from the `aNoise` attribute (declared by the chunk). */
@@ -82,6 +84,7 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
       uniform vec3 uLightDirection;
       varying vec2 vSheetUv;
       varying vec3 vSheetPosition;
+      ${shader.fragmentChunk ?? ''}
 
       // Right where a turning sheet leaves the spine it all but touches the pages under it, and
       // the shadow map's depth bias can't tell them apart: a thin strip next to the spine stays
@@ -104,6 +107,11 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
       ` +
       program.fragmentShader
     program.fragmentShader = program.fragmentShader
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        ${shader.fragmentChunk ? 'if (sheetHidden(vSheetPosition)) discard;' : ''}`,
+      )
       // light whichever side faces the camera
       .replace(
         '#include <normal_fragment_begin>',

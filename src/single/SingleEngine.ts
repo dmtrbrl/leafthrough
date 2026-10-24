@@ -32,13 +32,14 @@ const ROLL = {
   spineOpenEndDeg: 190,
   spineOpenPower: 4,
   coneEvenPower: 6,
+  lastPageEven: 0.98, // how close to even the roll gets by the last page, before the power
   coverTopRadius: 0.04,
   backTopRadius: 0.18,
   coverBottomRadius: 0.01,
   backBottomRadius: 0.05,
   radiusSpacingClump: 7.5,
   radiusSpacingSeed: 41.5,
-  fallDelayPages: 15, // read pages this far back settle flat behind everything
+  fallDelayPages: 15, // read pages this far back settle flat behind everything (fewer in short magazines)
   fallDurationPages: 3,
 }
 const SHAPE = { midLeadPower: 2, midBow: 2, midBowFlatFrom: 0.3, midBowFlatTo: 0.8, midRollScale: 2.5 }
@@ -124,6 +125,8 @@ export class SingleEngine implements Engine {
   private readonly count: number
   private readonly radiusSpacing: number[]
   private readonly catchUp: number[]
+  private readonly fallDelay: number
+  private readonly fallDuration: number
   private readonly abort = new AbortController()
 
   private current: number
@@ -192,6 +195,13 @@ export class SingleEngine implements Engine {
       acc += stepSum > 0 ? (s / stepSum) * P : 1
       this.catchUp.push(acc)
     }
+
+    // Read pages settle under the pile some way behind. A short magazine settles them sooner,
+    // so the pages under the cover are in place before the last page turns and the magazine
+    // closes without the pile jumping up.
+    const settleBy = P - 2 - PILE.renderDepth
+    this.fallDuration = clamp(settleBy / 2, 1, ROLL.fallDurationPages)
+    this.fallDelay = clamp(settleBy - this.fallDuration, 0, ROLL.fallDelayPages)
 
     this.bindInput()
   }
@@ -600,7 +610,13 @@ export class SingleEngine implements Engine {
 
     let turned = 0
     for (const sheet of this.sheets) turned += sheet.progress
-    for (const sheet of this.sheets) this.applyUniforms(sheet, turned)
+    const edge = this.pileEdge(turned)
+    // the page on top of the pile, the one a turning page reveals
+    const top = this.sheets.find((sheet) => sheet.index >= this.current && !this.busy(sheet))
+    for (const sheet of this.sheets) {
+      this.applyUniforms(sheet, turned, edge)
+      sheet.uniforms.uTrim.value.set(sheet === top || this.busy(sheet) ? 0 : 1, edge.bottom, edge.top)
+    }
 
     const closing = this.closing(turned) > 0
     for (const sheet of this.sheets) {
@@ -618,14 +634,30 @@ export class SingleEngine implements Engine {
     return true
   }
 
-  private applyUniforms(sheet: Sheet, turned: number) {
+  // How far the top of the pile reaches at its bottom and top edges. Pages under it would
+  // reach further, being flatter, and show a sliver of whatever is printed there; instead
+  // they stop at its edge, and whatever still gets past is trimmed in the shader.
+  private pileEdge(turned: number) {
+    const share = PILE.liftShutShare + (1 - PILE.liftShutShare) * (this.count ? this.paced(turned) / this.count : 0)
+    const topShare = share + (PILE.liftShutShare - share) * this.shutting(turned)
+    const height = this.pileHeight(0) * Math.max(topShare, 0.001)
+    return {
+      bottom: this.pileReach(height * (1 - 0.5 * PILE.coneTaper)),
+      top: this.pileReach(height * (1 + 0.5 * PILE.coneTaper)),
+    }
+  }
+
+  private applyUniforms(sheet: Sheet, turned: number, edge: { bottom: number; top: number }) {
     const u = sheet.uniforms
     const P = this.count
     const T = sheet.progress
     const paced = this.paced(turned)
+    // 1 on the last page, whatever the page count, so the roll is open and even by then
+    const lastPage = this.catchUp[Math.max(P - 1, 0)]
+    const through = lastPage > 0 ? paced / lastPage : 1
 
     // how far read pages swing round before rolling; it opens up as you read on
-    const openFraction = Math.min(paced / Math.max(1, P - 1), 1)
+    const openFraction = Math.min(through, 1)
     const spineOpen =
       ((ROLL.spineOpenStartDeg +
         (ROLL.spineOpenEndDeg - ROLL.spineOpenStartDeg) * Math.pow(openFraction, ROLL.spineOpenPower)) *
@@ -634,7 +666,7 @@ export class SingleEngine implements Engine {
     const shut = this.shutting(turned)
     const closed = this.closing(turned) >= 1 ? 1 : 0
     const fall = Math.max(
-      smooth((paced - (sheet.index + 1) - ROLL.fallDelayPages) / Math.max(ROLL.fallDurationPages, 0.001)),
+      smooth((paced - (sheet.index + 1) - this.fallDelay) / this.fallDuration),
       shut,
     )
 
@@ -642,7 +674,7 @@ export class SingleEngine implements Engine {
     const spacing = this.radiusSpacing[sheet.index] ?? 0
     const topR = ROLL.coverTopRadius + (ROLL.backTopRadius - ROLL.coverTopRadius) * spacing
     const bottomR = ROLL.coverBottomRadius + (ROLL.backBottomRadius - ROLL.coverBottomRadius) * spacing
-    const even = Math.pow(P ? Math.min(paced / P, 1) : 0, ROLL.coneEvenPower)
+    const even = Math.pow(Math.min(through * ROLL.lastPageEven, 1), ROLL.coneEvenPower)
     const midR = (topR + bottomR) / 2
     const radii = {
       top: (topR + (midR - topR) * even) * (1 - fall),
@@ -654,7 +686,7 @@ export class SingleEngine implements Engine {
     const readShare = P ? paced / P : 0
     const depth = fallen ? Math.max(0, P - turned) + sheet.index : Math.max(0, sheet.index - turned)
     const presence = fallen
-      ? Math.max(smooth(paced - (sheet.index + 1) - ROLL.fallDelayPages - ROLL.fallDurationPages), closed)
+      ? Math.max(smooth(paced - (sheet.index + 1) - this.fallDelay - this.fallDuration), closed)
       : (1 - T) * (1 - shut)
     const share = PILE.liftShutShare + (1 - PILE.liftShutShare) * readShare
     const open = this.pileHeight(depth) * (fallen ? PILE.liftShutShare : share)
@@ -679,7 +711,13 @@ export class SingleEngine implements Engine {
 
     const height = u.uPileLift.value.y
     const taper = u.uConeTaper.value
-    u.uPileReach.value.set(this.pileReach(height * (1 - 0.5 * taper)), this.pileReach(height * (1 + 0.5 * taper)))
+    let bottomReach = this.pileReach(height * (1 - 0.5 * taper))
+    let topReach = this.pileReach(height * (1 + 0.5 * taper))
+    if (!this.busy(sheet) && (fallen || sheet.index >= this.current)) {
+      bottomReach = Math.min(bottomReach, edge.bottom)
+      topReach = Math.min(topReach, edge.top)
+    }
+    u.uPileReach.value.set(bottomReach, topReach)
   }
 
   // a turning page: swing round the spine up to the open angle, then roll round the cone
