@@ -6,6 +6,12 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.3]
+
+- Reduced motion is gentler: it drops the decorative motion (the hover lift and the random
+  wobble between turns) and no longer speeds turns up 2.5× or turns off press and hold, which
+  made the magazine feel broken to people with Reduce Motion on.
+
 ## [0.1.2]
 
 - `maxPixelRatio` defaults to `3` instead of `2`, so pages are drawn at full sharpness on

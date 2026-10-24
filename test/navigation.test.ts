@@ -91,11 +91,13 @@ test('arrow keys do nothing with the keyboard turned off', () =>
     expect(m.page).toBe(0)
   }))
 
-test('reduced motion turns off hover lift and press and hold', () =>
+test('reduced motion drops the decorative motion and keeps turns and press and hold', () =>
   withMagazine({ motion: { reducedMotion: true } }, (m) => {
     const { settings } = internals(m).view
     expect(settings.motion.hoverLift).toBe(0)
-    expect(settings.interaction.hold).toBe(false)
+    expect(settings.motion.jitter).toBe(false)
+    expect(settings.motion.speed).toBe(1)
+    expect(settings.interaction.hold).toBe(true)
   }))
 
 // eslint-free peek at an engine's sheets
