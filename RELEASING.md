@@ -53,9 +53,13 @@ version is published by hand.
    | Workflow filename | `ci.yml`      |
    | Environment       | `npm`         |
 
+   Under **Allowed actions**, tick **Allow npm publish**. Without it npm only lets the
+   workflow stage versions for approval, and its `npm publish` is refused. Leave **Allow
+   npm dist-tag** unticked: the workflow sets the tag as part of publishing.
+
 3. **Turn off tokens.** In the same settings, under **Publishing access**, choose **Require
-   two-factor authentication and disallow tokens**. Trusted publishing keeps working, and
-   a leaked token can't publish.
+   two-factor authentication and disallow bypass 2fa tokens**. Trusted publishing keeps
+   working, and a leaked token can't publish.
 4. **Release 0.1.0 on GitHub.** In the repository's **Actions** tab, run the **CI** workflow
    on `main`. It finds 0.1.0 already on npm, so it only tags and releases it.
 
