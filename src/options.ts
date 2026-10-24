@@ -134,7 +134,7 @@ export interface LeafThroughOptions {
   lighting?: LightingOptions
   motion?: MotionOptions
   interaction?: InteractionOptions
-  /** Upper limit for the canvas pixel ratio. Default `2`. */
+  /** Upper limit for the canvas pixel ratio. `3` keeps pages sharp on 3× phone screens. Default `3`. */
   maxPixelRatio?: number
   /**
    * How many pages either side of the visible ones to load ahead. Visible means on screen:
@@ -251,6 +251,6 @@ export function resolveSettings(options: LeafThroughOptions, layout: Layout, pre
       hover: interaction.hover ?? true,
       keyboard: interaction.keyboard ?? true,
     },
-    maxPixelRatio: options.maxPixelRatio ?? 2,
+    maxPixelRatio: options.maxPixelRatio ?? 3,
   }
 }

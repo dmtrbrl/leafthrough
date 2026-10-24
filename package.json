@@ -1,6 +1,6 @@
 {
   "name": "leafthrough",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A 3D magazine you can flip through, with paper that bends, rolls and casts shadows. Built on three.js, with React, Vue, Svelte and Web Component bindings.",
   "keywords": [
     "magazine",
