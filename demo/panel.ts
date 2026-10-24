@@ -120,17 +120,68 @@ function setPath(object: Record<string, unknown>, path: string, value: unknown) 
   }
 }
 
-function loadState(): State {
+// --- state ↔ URL ---------------------------------------------------------------------
+
+// Each setting that differs from INITIAL is a query parameter of its own, named after its
+// option path: ?layout=single&motion.speed=0.5&lighting.sun.position=1,2,3. One that INITIAL
+// sets but has been cleared is left empty (label=).
+const TOP_LEVEL = new Set(['pageCount', 'source', 'grain', 'customLabel'])
+
+function valueAt(state: State, key: string): unknown {
+  return TOP_LEVEL.has(key) ? state[key as keyof State] : getPath(state.options, key)
+}
+
+// percent-encodes only what a query value can't hold, so spaces, slashes, colons and commas
+// stay readable
+function queryEscape(text: string) {
+  return encodeURIComponent(text)
+    .replace(/%20/g, '+')
+    .replace(/%(2C|2F|3A|40)/gi, (code) => decodeURIComponent(code))
+}
+
+function encodeValue(value: unknown, control: Control) {
+  if (value === undefined) return ''
+  if (Array.isArray(value)) return value.join(',')
+  // a '#' would end the query
+  if (control.kind === 'color' && typeof value === 'string') return value.replace(/^#/, '')
+  return String(value)
+}
+
+function decodeValue(raw: string, control: Control): unknown {
+  if (raw === '') return undefined
+  const number = (text: string) => (text.trim() === '' || Number.isNaN(Number(text)) ? undefined : Number(text))
+  switch (control.kind) {
+    case 'range':
+      return number(raw)
+    case 'toggle':
+      return raw === 'true'
+    case 'vec3': {
+      const values = raw.split(',').map(number)
+      return values.length === 3 && values.every((v) => v !== undefined) ? values : undefined
+    }
+    case 'color':
+      return /^[0-9a-f]{3,8}$/i.test(raw) ? `#${raw}` : raw
+    case 'select':
+      return control.choices?.find(([, value]) => String(value) === raw)?.[1]
+    default:
+      return raw
+  }
+}
+
+// links from before the query: the whole state as JSON in the hash
+function legacyState(): State | null {
   try {
     const hash = decodeURIComponent(location.hash.slice(1))
-    if (hash) return { options: {}, ...JSON.parse(hash) }
+    if (hash.startsWith('{')) return { options: {}, ...JSON.parse(hash) }
   } catch {}
-  return structuredClone(INITIAL)
+  return null
 }
 
 // --- controls ------------------------------------------------------------------------
 
 interface Control {
+  /** Its query parameter: the option path, or a State field. */
+  key?: string
   label: string
   hint?: string
   kind: 'select' | 'range' | 'toggle' | 'color' | 'text' | 'vec3'
@@ -147,7 +198,7 @@ interface Control {
  * Builds the panel into `container` and returns the initial options plus an event sink.
  */
 export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
-  let state = loadState()
+  let state = legacyState() ?? structuredClone(INITIAL)
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
   const layoutNow = (): Layout =>
@@ -161,6 +212,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     kind: Control['kind'],
     extra: Partial<Control> & { defaultValue?: unknown } = {},
   ): Control => ({
+    key: path,
     label,
     kind,
     read: () => getPath(state.options, path),
@@ -176,6 +228,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
       open: true,
       controls: [
         {
+          key: 'pageCount',
           label: 'Page count',
           kind: 'select',
           choices: [['12 (magazine)', 12], ['28 (repeat)', 28], ['7 (odd)', 7], ['2', 2]],
@@ -184,6 +237,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
           fallback: () => demoPages.length,
         },
         {
+          key: 'source',
           label: 'Page artwork',
           hint: 'Use the bundled artwork or a missing image to preview error handling.',
           kind: 'select',
@@ -219,6 +273,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
       title: 'Paper & print',
       controls: [
         {
+          key: 'grain',
           label: 'Paper grain',
           hint: 'Choose the built-in texture, turn grain off, or use a coarse sample.',
           kind: 'select',
@@ -287,6 +342,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
       controls: [
         option('label', 'Reader label', 'text', { defaultValue: 'Magazine' }),
         {
+          key: 'customLabel',
           label: 'Custom page announcement',
           hint: 'Use a custom announcement for assistive technology.',
           kind: 'toggle',
@@ -297,6 +353,16 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
       ],
     },
   ]
+
+  const controls = sections.flatMap((section) => section.controls)
+  const queried = new Set(controls.map((control) => control.key).filter(Boolean))
+  if (!legacyState()) {
+    const params = new URLSearchParams(location.search)
+    for (const control of controls) {
+      const raw = control.key ? params.get(control.key) : null
+      if (raw !== null) control.write(decodeValue(raw, control))
+    }
+  }
 
   // --- rendering ---------------------------------------------------------------------
 
@@ -312,8 +378,22 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
 
   const example = currentExample()
   const stage = document.getElementById('stage')
+  // reading tips, until the reader closes them for good
+  const guideDismissedKey = 'leafthrough-demo:guide-dismissed'
+  let guideDismissed = false
+  try {
+    guideDismissed = localStorage.getItem(guideDismissedKey) === '1'
+  } catch {}
   const stageGuide = el('div', { class: 'stage-guide' })
+  const closeGuide = el('button', { class: 'stage-guide-close', type: 'button', 'aria-label': 'Dismiss tips', title: 'Dismiss' })
+  closeGuide.onclick = () => {
+    try {
+      localStorage.setItem(guideDismissedKey, '1')
+    } catch {}
+    stageGuide.remove()
+  }
   stageGuide.append(
+    closeGuide,
     el('p', { class: 'stage-guide-primary' }, 'Drag a page to turn it, or use the arrows below.'),
     el('p', { class: 'stage-guide-secondary' }, 'Press and hold a page to flip through several pages.'),
     el('p', { class: 'stage-guide-secondary' }, `Use View code to copy the ${example.name} setup.`),
@@ -371,7 +451,8 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     closeCode.focus()
   }
   codeDialog.addEventListener('close', () => codeToggle.focus())
-  stage?.append(stageGuide, stageNav, codeDialog)
+  if (!guideDismissed) stage?.append(stageGuide)
+  stage?.append(stageNav, codeDialog)
   document.querySelector('header .github')?.after(codeToggle)
   const settingsToggle = document.querySelector<HTMLButtonElement>('[data-settings-toggle]')
   const settingsToggleText = settingsToggle?.querySelector('span')
@@ -629,19 +710,29 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     snippet.textContent = snippetText()
   }
 
-  function saveHash() {
-    const isInitial = JSON.stringify(state) === JSON.stringify(INITIAL)
-    const hash = isInitial ? '' : `#${encodeURIComponent(JSON.stringify(state))}`
-    history.replaceState(null, '', location.pathname + location.search + hash)
+  function saveQuery() {
+    const parts: string[] = []
+    // parameters that aren't the panel's are kept
+    for (const [key, value] of new URLSearchParams(location.search)) {
+      if (!queried.has(key)) parts.push(`${queryEscape(key)}=${queryEscape(value)}`)
+    }
+    for (const control of controls) {
+      if (!control.key) continue
+      const value = control.read()
+      if (JSON.stringify(value) === JSON.stringify(valueAt(INITIAL, control.key))) continue
+      parts.push(`${control.key}=${queryEscape(encodeValue(value, control))}`)
+    }
+    const search = parts.length ? `?${parts.join('&')}` : ''
+    history.replaceState(null, '', location.pathname + search)
     // carry the same setup across the framework pages
     for (const a of document.querySelectorAll<HTMLAnchorElement>('nav a[data-page]')) {
-      a.href = `./${a.dataset.page}.html${hash}`
+      a.href = `./${a.dataset.page}.html${search}`
     }
   }
 
   function changed() {
     host.apply(buildOptions(state))
-    saveHash()
+    saveQuery()
     syncAll()
   }
 
@@ -669,7 +760,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
     }
   }, 250)
 
-  saveHash()
+  saveQuery()
   syncAll()
   return { options: () => buildOptions(state), event }
 }
