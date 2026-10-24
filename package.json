@@ -59,6 +59,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsup && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build:demo": "vite build"
