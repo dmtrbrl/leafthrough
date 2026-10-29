@@ -291,6 +291,7 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
         option('paper.backColor', 'Unprinted paper', 'color', { hint: 'Color of the unprinted page back.' }),
         option('paper.wrinkles', 'Resting wrinkles', 'range', range(0, 3, 0.05)),
         option('paper.bulge', 'Spine bulge', 'range', range(0, 3, 0.05)),
+        option('paper.cutout', 'Cut to the page shape', 'toggle', { hint: 'Transparent parts of page images are cut away.' }),
       ],
     },
     {

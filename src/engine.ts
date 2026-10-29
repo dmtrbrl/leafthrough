@@ -1,12 +1,9 @@
-import type * as THREE from 'three'
+import * as THREE from 'three'
 import type { ResolvedSettings } from './options.js'
 import type { SheetShading } from './paper/paperMaterial.js'
 
 export interface EngineContext {
-  camera: THREE.PerspectiveCamera
-  canvas: HTMLCanvasElement
-  /** Receives pointer input; covers the pages. */
-  hitArea: HTMLElement
+  input: EngineInput
   settings: ResolvedSettings
   /** One texture per page, in reading order. */
   textures: THREE.Texture[]
@@ -19,11 +16,25 @@ export interface EngineContext {
   metrics: EngineMetrics
   /** Shared by every sheet; the engine keeps spineContact current. */
   shading: SheetShading
+  /** Asks for a frame: input and timers change the pages between frames. */
+  requestFrame: () => void
+}
+
+/** Where pointer input comes from, and how a point on screen reaches the magazine. */
+export interface EngineInput {
+  /** Receives pointer input. */
+  element: HTMLElement
+  /** Sets `ray` to the world-space ray through a point on screen; false when there's none. */
+  ray(clientX: number, clientY: number, ray: THREE.Ray): boolean
+  /** Whether a press at this point lands on the magazine. */
+  covers(clientX: number, clientY: number): boolean
 }
 
 export interface EngineMetrics {
   /** Pixels a drag spans per unit of `dragDistance`. */
-  dragWidth: number
+  readonly dragWidth: number
+  /** Screen displacement along the magazine’s projected x axis; defaults to horizontal. */
+  dragDelta?(dx: number, dy: number): number
 }
 
 export interface Engine {
@@ -47,5 +58,35 @@ export interface Engine {
   /** Moves to a position at once, without animating. */
   jumpTo(position: number): void
   setPageTexture(page: number, texture: THREE.Texture): void
+  /** Releases pointer capture and cancels active gestures and hold timers. */
+  cancelInput?(): void
   dispose(): void
+}
+
+const floor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
+const inverse = new THREE.Matrix4()
+const localRay = new THREE.Ray()
+
+/**
+ * Where a world-space ray meets the floor of `object` (its z = 0 plane), in the object's own
+ * units; null when it misses. However the object is moved, turned or scaled.
+ */
+export function floorPoint(object: THREE.Object3D, ray: THREE.Ray, target: THREE.Vector3): THREE.Vector3 | null {
+  object.updateWorldMatrix(true, false)
+  localRay.copy(ray).applyMatrix4(inverse.copy(object.matrixWorld).invert())
+  return localRay.intersectPlane(floor, target)
+}
+
+const raycaster = new THREE.Raycaster()
+const ndc = new THREE.Vector2()
+
+/** Sets `ray` to the ray from `camera` through a point on screen over `element`, which shows its view. */
+export function rayThrough(camera: THREE.Camera, element: Element, clientX: number, clientY: number, ray: THREE.Ray): boolean {
+  const rect = element.getBoundingClientRect()
+  if (!rect.width || !rect.height) return false
+  ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1)
+  camera.updateWorldMatrix(true, false)
+  raycaster.setFromCamera(ndc, camera)
+  ray.copy(raycaster.ray)
+  return true
 }

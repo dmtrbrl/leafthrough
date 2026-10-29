@@ -29,7 +29,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: Object.fromEntries(
-        ['index', 'react', 'vue', 'svelte', 'element'].map((name) => [name, resolve(__dirname, `demo/${name}.html`)]),
+        ['index', 'react', 'vue', 'svelte', 'element', 'three'].map((name) => [name, resolve(__dirname, `demo/${name}.html`)]),
       ),
     },
   },

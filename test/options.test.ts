@@ -43,7 +43,7 @@ test.each([
   ['a Color', new THREE.Color(0xff0000)],
 ])('paper.backColor as %s colours the blank page backs', (_, backColor) =>
   withMagazine({ paper: { grain: false, backColor } }, (m) => {
-    expect(Array.from(internals(m).backBlank.texture.image.data as Uint8Array)).toEqual([255, 0, 0, 255])
+    expect(Array.from(internals(m).paper.backBlank.texture.image.data as Uint8Array)).toEqual([255, 0, 0, 255])
   }))
 
 test('20 rebuilds keep the GPU geometry and texture counts steady', () =>

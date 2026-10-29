@@ -6,6 +6,25 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.4]
+
+- `LeafThroughObject`: the magazine as a `THREE.Group` for your own three.js scene. It draws
+  with your renderer, casts pointer input through your camera onto the pages wherever they
+  lie, and keeps every option, method and event of `LeafThrough`. `tick()` advances it from
+  your render loop, a `change` event asks for frames when you render on demand, `covers()`
+  tells your own pointer handlers which presses are the magazine's, `enabled` turns its input
+  off and on, and `bounds` gives its size for framing. See
+  [In your own three.js scene](README.md#in-your-own-threejs-scene).
+- `paper.cutout`: cuts each sheet to the shape of its front page, so transparent areas are no
+  paper at all and the shadow follows the outline. Off by default.
+- A three.js demo page: a magazine slides right out of a portrait paperboard mailer, with
+  geometric folds, matching LeafThrough branding and one reversible reveal. Reduced motion
+  skips the decorative reveal.
+- Scene-object drags follow the projected page axis when the magazine is rotated. Disabling
+  input releases gestures and cancels hold timers; hit testing follows the moving single-layout pile.
+- Page silhouettes now match their shadows for directional, spot and point lights, including
+  transparent cutouts and trimmed single-layout sheets.
+
 ## [0.1.3]
 
 - Reduced motion is gentler: it drops the decorative motion (the hover lift and the random
