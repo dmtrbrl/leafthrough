@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Engine, EngineContext, EngineMetrics } from '../engine.js'
+import { floorPoint, type Engine, type EngineContext, type EngineInput, type EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
 import { createSingleGeometry, createSingleSheet, type SingleSheetUniforms } from './singleSheet.js'
@@ -116,10 +116,9 @@ export class SingleEngine implements Engine {
   private readonly settings: ResolvedSettings
   private readonly halfHeight: number
   private readonly liftHeight: number
-  private readonly camera: THREE.PerspectiveCamera
-  private readonly canvas: HTMLCanvasElement
-  private readonly hitArea: HTMLElement
+  private readonly input: EngineInput
   private readonly metrics: EngineMetrics
+  private readonly requestFrame: () => void
   private readonly geometry: THREE.BufferGeometry
   private readonly sheets: Sheet[]
   private readonly count: number
@@ -140,20 +139,16 @@ export class SingleEngine implements Engine {
   private dirty = true
   private last = 0
 
-  private readonly raycaster = new THREE.Raycaster()
-  private readonly ndc = new THREE.Vector2()
-  private readonly floor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
+  private readonly ray = new THREE.Ray()
   private readonly hit = new THREE.Vector3()
-  private readonly spine = new THREE.Vector3()
 
   constructor(ctx: EngineContext) {
     this.settings = ctx.settings
     this.halfHeight = ctx.settings.pageAspect / 2
     this.liftHeight = PILE.liftHeight * ctx.settings.paper.bulge
-    this.camera = ctx.camera
-    this.canvas = ctx.canvas
-    this.hitArea = ctx.hitArea
+    this.input = ctx.input
     this.metrics = ctx.metrics
+    this.requestFrame = ctx.requestFrame
     this.count = ctx.textures.length
     this.maxPosition = this.count
     this.current = clamp(Math.round(ctx.position), 0, Math.max(this.count - 1, 0)) // pages turned
@@ -240,7 +235,14 @@ export class SingleEngine implements Engine {
     const sheet = this.sheets[page]
     if (!sheet) return
     sheet.uniforms.uFront.value = texture
-    this.dirty = true
+    this.wake()
+  }
+
+  cancelInput() {
+    this.cancelHold()
+    this.touch = null
+    if (this.press) this.release(new PointerEvent('pointercancel', { pointerId: this.press.id }))
+    this.wake()
   }
 
   dispose() {
@@ -262,6 +264,12 @@ export class SingleEngine implements Engine {
 
   private seconds(time: number) {
     return time / this.settings.motion.speed
+  }
+
+  // something changed between frames
+  private wake() {
+    this.dirty = true
+    this.requestFrame()
   }
 
   // pile lift for a sheet this many pages below the top
@@ -310,13 +318,9 @@ export class SingleEngine implements Engine {
   }
 
   // floor point under the pointer, relative to the book
-  private floorPoint(clientX: number, clientY: number) {
-    const rect = this.canvas.getBoundingClientRect()
-    this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1)
-    this.raycaster.setFromCamera(this.ndc, this.camera)
-    this.floor.constant = -this.group.position.z
-    const hit = this.raycaster.ray.intersectPlane(this.floor, this.hit)
-    return hit ? { x: hit.x - this.group.position.x, y: hit.y - this.group.position.y } : null
+  private pointAt(clientX: number, clientY: number) {
+    if (!this.input.ray(clientX, clientY, this.ray)) return null
+    return floorPoint(this.group, this.ray, this.hit)
   }
 
   // where on the page the hand is, steering how the page tilts as it turns
@@ -336,11 +340,10 @@ export class SingleEngine implements Engine {
     return this.current < (this.settings.loop ? this.count : this.count - 1)
   }
 
-  // which page a press at this x would pick up: right of the spine turns forward
-  private sheetAt(clientX: number) {
-    const rect = this.canvas.getBoundingClientRect()
-    const spineX = this.spine.copy(this.group.position).project(this.camera).x
-    const forward = clientX >= rect.left + (0.5 * spineX + 0.5) * rect.width
+  // which page a press here would pick up: right of the spine turns forward
+  private sheetAt(point: { x: number } | null) {
+    if (!point) return null
+    const forward = point.x >= 0
     if (!this.canTurn(forward)) return null
     return { sheet: this.sheets[forward ? this.current : this.current - 1], forward }
   }
@@ -349,7 +352,7 @@ export class SingleEngine implements Engine {
   private commit(forward: boolean, toProgress: number) {
     if (forward && toProgress === 1) this.current++
     else if (!forward && toProgress === 0) this.current--
-    this.dirty = true
+    this.wake()
   }
 
   private fly(sheet: Sheet, forward: boolean, toProgress: number, flipTime = CLICK.flipTime) {
@@ -380,13 +383,13 @@ export class SingleEngine implements Engine {
     this.flights = []
     this.current = clamp(Math.round(position), 0, Math.max(this.count - 1, 0))
     for (const sheet of this.sheets) sheet.progress = sheet.index < this.current ? 1 : 0
-    this.dirty = true
+    this.wake()
   }
 
   // --- input ------------------------------------------------------------------
 
   private bindInput() {
-    const el = this.hitArea
+    const el = this.input.element
     const signal = this.abort.signal
     const { interaction } = this.settings
 
@@ -396,10 +399,10 @@ export class SingleEngine implements Engine {
         if (this.press && e.pointerId !== this.press.id) return
         if (this.hold && this.moved(e, this.hold.fired ? HOLD.moveSlopPx : undefined)) this.cancelHold()
         if (!this.drag || !this.press || !interaction.drag) return
-        const dx = e.clientX - this.press.x
+        const dx = this.metrics.dragDelta?.(e.clientX - this.press.x, e.clientY - this.press.y) ?? e.clientX - this.press.x
         this.drag.progress = clamp(this.drag.base - dx / this.drag.rectWidth / this.settings.motion.dragDistance, 0, 1)
-        this.grab(this.drag.sheet, this.floorPoint(e.clientX, e.clientY), false)
-        this.dirty = true
+        this.grab(this.drag.sheet, this.pointAt(e.clientX, e.clientY), false)
+        this.wake()
       },
       { signal },
     )
@@ -410,11 +413,13 @@ export class SingleEngine implements Engine {
         // a second finger doesn't take over; a new primary pointer means the old one is gone
         if (this.press && !e.isPrimary) return
         if (e.button !== 0 || !(interaction.drag || interaction.click || interaction.hold)) return
-        const target = this.sheetAt(e.clientX)
+        if (!this.input.covers(e.clientX, e.clientY)) return
+        const point = this.pointAt(e.clientX, e.clientY)
+        const target = this.sheetAt(point)
         if (!target) return
         const sheet = target.sheet
         if (!this.inFlight(sheet)) sheet.wobble = this.randomWobble()
-        this.grab(sheet, this.floorPoint(e.clientX, e.clientY), true)
+        this.grab(sheet, point, true)
         this.flights = this.flights.filter((f) => f.sheet !== sheet)
         this.press = { id: e.pointerId, x: e.clientX, y: e.clientY }
         this.drag = {
@@ -439,7 +444,7 @@ export class SingleEngine implements Engine {
         try {
           el.setPointerCapture(e.pointerId)
         } catch {}
-        this.dirty = true
+        this.wake()
       },
       { signal },
     )
@@ -454,7 +459,8 @@ export class SingleEngine implements Engine {
       'touchstart',
       (e) => {
         const t = e.touches[0]
-        this.touch = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, claimed: false } : null
+        const single = e.touches.length === 1 && this.input.covers(t.clientX, t.clientY)
+        this.touch = single ? { x: t.clientX, y: t.clientY, claimed: false } : null
       },
       { passive: true, signal },
     )
@@ -503,7 +509,7 @@ export class SingleEngine implements Engine {
     const sheet = this.sheets[hold.forward ? this.current : this.current - 1]
     const ramp = (from: number, to: number) => from + (to - from) * Math.min(hold.count / HOLD.speedUpSheets, 1)
     if (!this.inFlight(sheet)) sheet.wobble = this.randomWobble()
-    this.grab(sheet, this.floorPoint(hold.x, hold.y), true)
+    this.grab(sheet, this.pointAt(hold.x, hold.y), true)
     const flipTime = ramp(HOLD.firstFlipTime, HOLD.fastestFlipTime)
     this.fly(sheet, hold.forward, hold.forward ? 1 : 0, flipTime)
     hold.count++
@@ -523,8 +529,9 @@ export class SingleEngine implements Engine {
     this.drag = null
     this.press = null
     try {
-      this.hitArea.releasePointerCapture(e.pointerId)
+      this.input.element.releasePointerCapture(e.pointerId)
     } catch {}
+    this.wake()
     if (!drag) return
     const { interaction } = this.settings
 
@@ -564,6 +571,7 @@ export class SingleEngine implements Engine {
     const to = drag.forward ? 0 : 1
     if (drag.sheet.progress === to) return
     this.flights.push({ sheet: drag.sheet, from: drag.sheet.progress, to, start: performance.now(), duration: 300 })
+    this.wake()
   }
 
   // --- simulation ---------------------------------------------------------------

@@ -1,23 +1,27 @@
 import * as THREE from 'three'
 import { PageContent, sourceKey, VISUALLY_HIDDEN } from './content.js'
-import type { Engine } from './engine.js'
+import { rayThrough, type Engine } from './engine.js'
 import { fit, framingFor, plainFramingFor, type Framing, type Rect } from './framing.js'
+import { bindKeyboard, pageDetail, pagesAt, pageToPosition, Riffle } from './navigation.js'
 import {
+  changedOptions,
   DEFAULT_SPREAD_QUERY,
   defaultPageLabel,
+  LIVE_OPTIONS,
   pageImage,
+  preloadRadius,
   resolveSettings,
+  snapshot,
   type LeafThroughOptions,
   type Layout,
   type PageChangeDetail,
   type ResolvedSettings,
 } from './options.js'
-import { solidTexture } from './paper/paperMaterial.js'
-import { createPaperPattern } from './paper/paperPattern.js'
+import { colorKey, PaperTextures } from './paper/paperTextures.js'
 import { PlainEngine } from './plain/PlainEngine.js'
 import { SingleEngine } from './single/SingleEngine.js'
 import { SpreadEngine } from './spread/SpreadEngine.js'
-import { loadGrain, PageLoader } from './textures.js'
+import { PageLoader } from './textures.js'
 
 export interface LeafThroughEventMap {
   pagechange: CustomEvent<PageChangeDetail>
@@ -30,20 +34,6 @@ export interface GoToOptions {
   /** Turn the pages one by one instead of jumping. Default `false`. */
   animate?: boolean
 }
-
-// options that don't need a rebuild (pages only need one when their images change)
-const LIVE_KEYS = new Set<keyof LeafThroughOptions>([
-  'onPageChange',
-  'onReady',
-  'onPageLoad',
-  'onError',
-  'formatPageLabel',
-  'label',
-  'startPage',
-  'preload',
-  'pages',
-])
-const DEFAULT_PRELOAD = 6
 
 const isClient = typeof window !== 'undefined'
 
@@ -71,9 +61,7 @@ export class LeafThrough extends EventTarget {
   // null when the browser can't run WebGL; the magazine then shows plain pages
   private readonly renderer: THREE.WebGLRenderer | null
   private frameRequest = 0
-  private readonly blank: THREE.Texture
-  private readonly backBlank: { texture: THREE.Texture; color: string }
-  private pattern: { texture: THREE.Texture; key: unknown } | null = null
+  private readonly paper: PaperTextures
   private loader: PageLoader | null = null
 
   private view: {
@@ -97,8 +85,7 @@ export class LeafThrough extends EventTarget {
   private visible = true
   private needsRender = true
   private running = false
-  // an animated goTo(): turn one page every `interval` ms until `target`
-  private riffle: { target: number; interval: number; last: number } | null = null
+  private readonly riffle = new Riffle()
   private lastPagesKey = ''
   private ready = false
   private disposed = false
@@ -140,9 +127,10 @@ export class LeafThrough extends EventTarget {
     this.renderer = createRenderer(this.canvas)
     container.append(element)
 
-    this.blank = solidTexture('#fcfcf9')
-    const backColor = options.paper?.backColor ?? '#fcfcf9'
-    this.backBlank = { texture: solidTexture(backColor), color: colorKey(backColor) }
+    this.paper = new PaperTextures(options.paper?.backColor ?? '#fcfcf9', {
+      onGrain: () => this.remount(),
+      onError: (error) => this.fail(error),
+    })
 
     const signal = this.abort.signal
     this.watchSpreadQuery()
@@ -204,20 +192,20 @@ export class LeafThrough extends EventTarget {
 
   /** Turns to the next page. Returns false at the end. */
   next(): boolean {
-    this.stopRiffle()
+    this.riffle.stop()
     return this.view?.engine.flip(true) ?? false
   }
 
   /** Turns to the previous page. Returns false at the start. */
   prev(): boolean {
-    this.stopRiffle()
+    this.riffle.stop()
     return this.view?.engine.flip(false) ?? false
   }
 
   /** Shows `page` (0-based), jumping there or turning the pages one by one. */
   goTo(page: number, { animate = false }: GoToOptions = {}) {
     if (!this.view || Number.isNaN(page)) return
-    this.stopRiffle()
+    this.riffle.stop()
     const engine = this.view.engine
     const target = this.pageToPosition(page, this.view.settings.layout)
     if (!animate) {
@@ -225,7 +213,7 @@ export class LeafThrough extends EventTarget {
       return
     }
     if (engine.position === target) return
-    this.riffle = { target, interval: 140 / this.view.settings.motion.speed, last: -Infinity }
+    this.riffle.start(target, this.view.settings.motion.speed)
     this.needsRender = true
   }
 
@@ -254,14 +242,13 @@ export class LeafThrough extends EventTarget {
     const previous = this.options
     const next = (this.options = snapshot(options))
 
-    const keys = new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof LeafThroughOptions>
-    const changed = [...keys].filter((key) => !deepEqual(previous[key], next[key]))
+    const changed = changedOptions(previous, next)
     if (!changed.length) return
     if (changed.includes('label') || changed.includes('formatPageLabel')) this.applyLabel()
     if (changed.includes('spreadQuery')) this.watchSpreadQuery()
 
     const page = this.page
-    let rebuild = changed.some((key) => !LIVE_KEYS.has(key))
+    let rebuild = changed.some((key) => !LIVE_OPTIONS.has(key))
     // new images load from scratch; a change to only alt or text just updates the content
     if (changed.includes('pages') && this.pagesKey(next) !== this.lastPagesKey) {
       this.loader?.dispose()
@@ -269,7 +256,7 @@ export class LeafThrough extends EventTarget {
       this.resetReady()
       rebuild = true
     }
-    if (changed.includes('preload')) this.loader?.setRadius(this.preloadRadius())
+    if (changed.includes('preload')) this.loader?.setRadius(preloadRadius(this.options.preload))
     if (rebuild) this.remount(page)
   }
 
@@ -296,7 +283,7 @@ export class LeafThrough extends EventTarget {
   dispose() {
     if (this.disposed) return
     this.disposed = true
-    this.stopRiffle()
+    this.riffle.stop()
     this.setLoop(null)
     this.abort.abort()
     this.spreadMedia?.abort.abort()
@@ -305,9 +292,7 @@ export class LeafThrough extends EventTarget {
     this.view?.dispose()
     this.view = null
     this.loader?.dispose()
-    this.pattern?.texture.dispose()
-    this.blank.dispose()
-    this.backBlank.texture.dispose()
+    this.paper.dispose()
     this.renderer?.dispose()
     // free the GL context now; browsers only allow a handful at once
     this.renderer?.forceContextLoss()
@@ -332,7 +317,7 @@ export class LeafThrough extends EventTarget {
 
   private remount(page = this.page) {
     if (this.disposed) return
-    this.stopRiffle()
+    this.riffle.stop()
     const wasPlain = this.view?.engine instanceof PlainEngine
     this.view?.dispose()
 
@@ -416,25 +401,24 @@ export class LeafThrough extends EventTarget {
       scene.add(floor)
     }
 
-    const pages = this.options.pages
-    const textures = pages.map((_, i) => this.loader?.textures[i] ?? this.blank)
-    const backColor = colorKey(settings.paper.backColor)
-    if (backColor !== this.backBlank.color) {
-      this.backBlank.texture.dispose()
-      this.backBlank.texture = solidTexture(settings.paper.backColor)
-      this.backBlank.color = backColor
-    }
+    const blank = this.paper.blank
+    const textures = this.options.pages.map((_, i) => this.loader?.textures[i] ?? blank)
     const ctx = {
-      camera,
-      canvas: this.canvas,
-      hitArea: this.hitArea,
+      input: {
+        element: this.hitArea,
+        ray: (x: number, y: number, ray: THREE.Ray) => rayThrough(camera, this.canvas, x, y, ray),
+        // the hit area itself covers just the pages
+        covers: () => true,
+      },
       settings,
       textures,
-      blank: layout === 'single' ? this.backBlank.texture : this.blank,
-      pattern: this.patternFor(settings, renderer),
+      blank: layout === 'single' ? this.paper.back(settings.paper.backColor) : blank,
+      pattern: this.paper.grain(settings, renderer),
       position: this.pageToPosition(page, layout),
       metrics: this.metrics,
       shading,
+      // the loop draws every frame the engine asks for while the magazine is on screen
+      requestFrame: () => {},
     }
     const engine: Engine = layout === 'spread' ? new SpreadEngine(ctx) : new SingleEngine(ctx)
     scene.add(engine.group)
@@ -452,33 +436,6 @@ export class LeafThrough extends EventTarget {
         floor?.material.dispose()
       },
     }
-  }
-
-  private patternFor(settings: ResolvedSettings, renderer: THREE.WebGLRenderer): THREE.Texture {
-    const grain = settings.paper.grain
-    const key = grain === true || grain === undefined ? 'builtin' : grain === false ? 'none' : grain
-    if (this.pattern?.key === key) return this.pattern.texture
-    this.pattern?.texture.dispose()
-    let texture: THREE.Texture
-    if (key === 'builtin') texture = createPaperPattern(renderer)
-    else if (key === 'none') texture = solidTexture('#000000')
-    else {
-      // until the custom grain arrives, use none
-      texture = solidTexture('#000000')
-      loadGrain(key as string | HTMLImageElement | HTMLCanvasElement).then(
-        (loaded) => {
-          if (this.pattern?.key !== key || this.disposed) return loaded.dispose()
-          this.pattern.texture.dispose()
-          this.pattern.texture = loaded
-          this.remount()
-        },
-        (error) => {
-          if (this.pattern?.key === key && !this.disposed) this.fail(error)
-        },
-      )
-    }
-    this.pattern = { texture, key }
-    return texture
   }
 
   // sizes the canvas and hit area to the container
@@ -559,14 +516,9 @@ export class LeafThrough extends EventTarget {
     return options.pages.map((p) => sourceKey(pageImage(p))).join('\n')
   }
 
-  private preloadRadius() {
-    const preload = this.options.preload ?? DEFAULT_PRELOAD
-    return Number.isNaN(preload) ? DEFAULT_PRELOAD : Math.max(0, preload)
-  }
-
   private loadPages(renderer: THREE.WebGLRenderer, around: number, layout: Layout) {
     this.loader?.dispose()
-    const loader = new PageLoader(this.options.pages.map(pageImage), renderer, this.preloadRadius(), {
+    const loader = new PageLoader(this.options.pages.map(pageImage), renderer, preloadRadius(this.options.preload), {
       onLoad: (page, texture) => {
         if (this.loader !== loader) return
         this.view?.engine.setPageTexture(page, texture)
@@ -575,7 +527,7 @@ export class LeafThrough extends EventTarget {
       },
       onUnload: (page) => {
         if (this.loader !== loader) return
-        this.view?.engine.setPageTexture(page, this.blank)
+        this.view?.engine.setPageTexture(page, this.paper.blank)
         this.needsRender = true
       },
       onError: (page, error) => this.fail(error, page),
@@ -624,29 +576,16 @@ export class LeafThrough extends EventTarget {
   // --- pages ↔ engine positions -------------------------------------------------------
 
   private pageToPosition(page: number, layout: Layout) {
-    const count = this.options.pages.length
-    // NaN (say, from a start-page attribute that isn't a number) means the first page
-    const p = THREE.MathUtils.clamp(Math.round(page) || 0, 0, Math.max(count - 1, 0))
-    return layout === 'spread' ? Math.ceil(p / 2) : p
+    return pageToPosition(page, layout, this.options.pages.length)
   }
 
-  private positionToPage(position: number, layout: Layout) {
-    return layout === 'spread' ? Math.max(0, 2 * position - 1) : position
-  }
-
-  // the pages showing at an engine position
   private pagesAt(position: number, layout: Layout) {
-    const candidates = layout === 'spread' ? [2 * position - 1, 2 * position] : [position]
-    return candidates.filter((p) => p >= 0 && p < this.options.pages.length)
+    return pagesAt(position, layout, this.options.pages.length)
   }
 
   private detail(): PageChangeDetail {
-    const count = this.options.pages.length
     const layout = this.view?.settings.layout ?? this.pickLayout()
-    const position = this.view?.engine.position ?? 0
-    const visiblePages = this.pagesAt(position, layout)
-    const page = visiblePages.length ? visiblePages[0] : Math.max(0, Math.min(this.positionToPage(position, layout), count - 1))
-    return { page, visiblePages, pageCount: count, layout }
+    return pageDetail(this.view?.engine.position ?? 0, layout, this.options.pages.length)
   }
 
   private lastDetailKey = ''
@@ -685,50 +624,12 @@ export class LeafThrough extends EventTarget {
   // --- input and loop -----------------------------------------------------------------
 
   private bindKeyboard() {
-    const handler = (e: KeyboardEvent) => {
-      const mode = this.view?.settings.interaction.keyboard
-      if (!mode || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return
-      if (mode === 'global') {
-        const target = e.target as HTMLElement | null
-        if (target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return
-      } else if (e.currentTarget !== this.element) return
-      const last = this.pageCount - 1
-      const actions: Record<string, () => unknown> = {
-        ArrowRight: () => this.next(),
-        PageDown: () => this.next(),
-        ArrowLeft: () => this.prev(),
-        PageUp: () => this.prev(),
-        Home: () => this.goTo(0),
-        End: () => this.goTo(last),
-      }
-      const action = actions[e.key]
-      if (!action) return
-      e.preventDefault()
-      action()
-    }
-    this.element.addEventListener('keydown', handler, { signal: this.abort.signal })
-    window.addEventListener(
-      'keydown',
-      (e) => {
-        if (this.view?.settings.interaction.keyboard === 'global' && !this.element.contains(e.target as Node)) handler(e)
-      },
-      { signal: this.abort.signal },
+    bindKeyboard(
+      this.element,
+      () => this.view?.settings.interaction.keyboard,
+      { next: () => this.next(), prev: () => this.prev(), first: () => this.goTo(0), last: () => this.goTo(this.pageCount - 1) },
+      this.abort.signal,
     )
-  }
-
-  private stopRiffle() {
-    this.riffle = null
-  }
-
-  private stepRiffle(now: number, engine: Engine) {
-    const riffle = this.riffle
-    if (!riffle || now - riffle.last < riffle.interval) return
-    if (engine.position === riffle.target) {
-      this.riffle = null
-      return
-    }
-    riffle.last = now
-    if (!engine.flip(engine.position < riffle.target)) this.riffle = null
   }
 
   // only animate while the magazine is on screen and the tab is visible
@@ -772,7 +673,7 @@ export class LeafThrough extends EventTarget {
   private frame(now: number) {
     const view = this.view
     if (!view) return
-    this.stepRiffle(now, view.engine)
+    this.riffle.step(now, view.engine)
     const moved = view.engine.update(now)
     this.followReader(view.engine, view.settings.layout)
     if (view.engine.activeSide !== this.hitSide) this.placeHitArea()
@@ -796,10 +697,6 @@ export class LeafThrough extends EventTarget {
 
 // --- helpers ---------------------------------------------------------------------
 
-function colorKey(color: THREE.ColorRepresentation) {
-  return new THREE.Color(color).getHexString()
-}
-
 // null when the browser can't run WebGL
 function createRenderer(canvas: HTMLCanvasElement) {
   let renderer: THREE.WebGLRenderer
@@ -814,26 +711,4 @@ function createRenderer(canvas: HTMLCanvasElement) {
   // shadows only re-render on frames where something moved
   renderer.shadowMap.autoUpdate = false
   return renderer
-}
-
-// Copies the plain objects and arrays, keeping everything else (textures, elements) as is.
-// Comparing against a copy sees changes made in place, such as Vue's reactive objects.
-function snapshot<T>(value: T): T {
-  if (typeof value !== 'object' || value === null) return value
-  if (Array.isArray(value)) return value.map(snapshot) as T
-  if (Object.getPrototypeOf(value) !== Object.prototype) return value
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, snapshot(item)])) as T
-}
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return true
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
-  if (Array.isArray(a) !== Array.isArray(b)) return false
-  const protoA = Object.getPrototypeOf(a)
-  if (protoA !== Object.prototype && protoA !== Array.prototype) return false
-  if (protoA !== Object.getPrototypeOf(b)) return false
-  const keysA = Object.keys(a)
-  const keysB = Object.keys(b)
-  if (keysA.length !== keysB.length) return false
-  return keysA.every((key) => deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
 }

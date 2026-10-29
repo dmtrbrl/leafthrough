@@ -1,0 +1,18 @@
+/* three.js demo: the scene fills the window under the header, with a bar of its own below. */
+.scene-code { text-decoration: none; }
+@media (max-width: 900px) {
+  .scene-header { grid-template-columns: minmax(0, 1fr) repeat(2, 44px); }
+}
+.scene { position: absolute; inset: 0; }
+.scene canvas { display: block; touch-action: none; }
+.scene-bar { position: absolute; z-index: 3; left: 50%; bottom: clamp(18px, 4vh, 36px); display: flex; align-items: center; gap: 14px; transform: translateX(-50%); white-space: nowrap; }
+.scene-hint { color: var(--muted); font-size: 13px; }
+.scene-hint:empty { display: none; }
+.scene-button { height: 36px; padding: 0 14px; border: 1px solid #d8d6cf; border-radius: 8px; color: #383a37; background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size: 13px; font-weight: 580; transition: border-color .16s, background .16s, opacity .16s; }
+.scene-button:hover:not(:disabled) { border-color: #a9aaa4; background: var(--glass-hover); }
+.scene-button:disabled { opacity: .45; cursor: default; }
+.scene canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -6px; }
+@media (max-width: 600px) {
+  .scene-bar { width: calc(100% - 32px); flex-direction: column; gap: 8px; }
+  .scene-hint { margin: 0; font-size: 12px; white-space: normal; text-align: center; }
+}

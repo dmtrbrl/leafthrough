@@ -124,10 +124,19 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
         '#include <map_fragment>',
         `vec4 frontColor = texture2D(uFront, vSheetUv);
         vec4 backColor = texture2D(uBack, vec2(1.0 - vSheetUv.x, vSheetUv.y));
-        // Transparent artwork is unprinted paper, not a hole in the sheet. Page images are
+        ${
+          paper.cutout
+            ? `// Cut to the front page: no paper where it's transparent. The edge that's left
+        // keeps its own colour (page images are premultiplied, so divide the alpha out) rather
+        // than fading to paper, which would leave a pale fringe.
+        if (frontColor.a < 0.5) discard;
+        frontColor = vec4(frontColor.rgb / frontColor.a, 1.0);
+        backColor = backColor.a > 0.01 ? vec4(backColor.rgb / backColor.a, 1.0) : vec4(BLANK_PAPER, 1.0);`
+            : `// Transparent artwork is unprinted paper, not a hole in the sheet. Page images are
         // premultiplied, so this is "over" compositing onto the paper colour.
         frontColor = vec4(frontColor.rgb + BLANK_PAPER * (1.0 - frontColor.a), 1.0);
-        backColor = vec4(backColor.rgb + BLANK_PAPER * (1.0 - backColor.a), 1.0);
+        backColor = vec4(backColor.rgb + BLANK_PAPER * (1.0 - backColor.a), 1.0);`
+        }
         vec4 faceColor = gl_FrontFacing ? frontColor : backColor;
         vec4 otherColor = gl_FrontFacing ? backColor : frontColor;
         // thin paper lets some of the other side through
@@ -158,16 +167,41 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
     depthPacking: THREE.RGBADepthPacking,
     side: THREE.DoubleSide,
   })
-  depthMaterial.onBeforeCompile = (program) => {
+  const distanceMaterial = new THREE.MeshDistanceMaterial({ side: THREE.DoubleSide })
+  // Point lights use a distance pass; directional and spot lights use a depth pass.
+  // Both must draw precisely the same deformed, trimmed silhouette as the visible sheet.
+  depthMaterial.onBeforeCompile = distanceMaterial.onBeforeCompile = (program) => {
     Object.assign(program.uniforms, uniforms)
-    program.vertexShader = constants + shader.vertexChunk + program.vertexShader
+    program.vertexShader = constants + shader.vertexChunk + 'varying vec2 vSheetUv;\nvarying vec3 vSheetPosition;\n' + program.vertexShader
     program.vertexShader = program.vertexShader.replace(
       '#include <begin_vertex>',
-      `vec3 transformed = sheetPosition(uv, ${noiseAt('x')}) - vec3(SHADOW_OFFSET_X, 0.0, 0.0);`,
+      `vSheetUv = uv;
+      vSheetPosition = sheetPosition(uv, ${noiseAt('x')});
+      vec3 transformed = vSheetPosition - vec3(SHADOW_OFFSET_X, 0.0, 0.0);`,
+    )
+    program.fragmentShader = constants + `
+      uniform sampler2D uFront;
+      varying vec2 vSheetUv;
+      varying vec3 vSheetPosition;
+      ${shader.fragmentChunk ?? ''}
+    ` + program.fragmentShader
+    program.fragmentShader = program.fragmentShader.replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>
+      ${paper.cutout ? 'if (texture2D(uFront, vSheetUv).a < 0.5) discard;' : ''}
+      ${shader.fragmentChunk ? 'if (sheetHidden(vSheetPosition)) discard;' : ''}`,
     )
   }
 
-  return { material, depthMaterial }
+  // three.js reuses a compiled program whose cache key matches, and the default key is the
+  // onBeforeCompile source, the same for every sheet. The generated code is what differs (layout,
+  // page aspect, paper), so it is the key: magazines sharing a renderer each get their own.
+  const cacheKey = constants + shader.vertexChunk + (shader.fragmentChunk ?? '') + (paper.cutout ? 'cutout' : '')
+  material.customProgramCacheKey = () => cacheKey
+  depthMaterial.customProgramCacheKey = () => cacheKey
+  distanceMaterial.customProgramCacheKey = () => cacheKey
+
+  return { material, depthMaterial, distanceMaterial }
 }
 
 const DIRECTIONAL_SHADOW =
@@ -190,9 +224,10 @@ export function createSheetMesh(
   shader: SheetShader,
   settings: ResolvedSettings,
 ): SheetMesh {
-  const { material, depthMaterial } = createPaperMaterials(uniforms, shader, settings)
+  const { material, depthMaterial, distanceMaterial } = createPaperMaterials(uniforms, shader, settings)
   const mesh = new THREE.Mesh(geometry, material)
   mesh.customDepthMaterial = depthMaterial
+  mesh.customDistanceMaterial = distanceMaterial
   mesh.castShadow = settings.lighting.shadows
   mesh.receiveShadow = settings.lighting.shadows
   mesh.frustumCulled = false
@@ -216,6 +251,7 @@ export function layerSheet(mesh: SheetMesh, depth: number, count: number, moving
 export function disposeSheetMesh(mesh: SheetMesh) {
   mesh.material.dispose()
   mesh.customDepthMaterial?.dispose()
+  mesh.customDistanceMaterial?.dispose()
 }
 
 /** A 1×1 texture of one colour, for blank pages and placeholders. */

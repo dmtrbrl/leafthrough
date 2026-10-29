@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Engine, EngineContext, EngineMetrics } from '../engine.js'
+import { floorPoint, type Engine, type EngineContext, type EngineInput, type EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
 import { createSpreadGeometry, createSpreadSheet, type SpreadSheetUniforms } from './spreadSheet.js'
@@ -95,10 +95,9 @@ export class SpreadEngine implements Engine {
 
   private readonly settings: ResolvedSettings
   private readonly halfHeight: number
-  private readonly camera: THREE.PerspectiveCamera
-  private readonly canvas: HTMLCanvasElement
-  private readonly hitArea: HTMLElement
+  private readonly input: EngineInput
   private readonly metrics: EngineMetrics
+  private readonly requestFrame: () => void
   private readonly geometry: THREE.BufferGeometry
   private readonly sheets: Sheet[]
   private readonly abort = new AbortController()
@@ -116,19 +115,15 @@ export class SpreadEngine implements Engine {
   private dirty = true
   private last = 0
 
-  private readonly raycaster = new THREE.Raycaster()
-  private readonly ndc = new THREE.Vector2()
-  private readonly floor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)
+  private readonly ray = new THREE.Ray()
   private readonly hit = new THREE.Vector3()
-  private readonly spine = new THREE.Vector3()
 
   constructor(ctx: EngineContext) {
     this.settings = ctx.settings
     this.halfHeight = ctx.settings.pageAspect / 2
-    this.camera = ctx.camera
-    this.canvas = ctx.canvas
-    this.hitArea = ctx.hitArea
+    this.input = ctx.input
     this.metrics = ctx.metrics
+    this.requestFrame = ctx.requestFrame
     this.shading = ctx.shading
 
     const count = Math.ceil(ctx.textures.length / 2)
@@ -192,7 +187,14 @@ export class SpreadEngine implements Engine {
     if (!sheet) return
     if (page % 2 === 0) sheet.uniforms.uFront.value = texture
     else sheet.uniforms.uBack.value = texture
-    this.dirty = true
+    this.wake()
+  }
+
+  cancelInput() {
+    this.cancelHold()
+    this.hover.active = false
+    if (this.press) this.release(new PointerEvent('pointercancel', { pointerId: this.press.id }))
+    this.wake()
   }
 
   dispose() {
@@ -213,6 +215,18 @@ export class SpreadEngine implements Engine {
     return time / this.settings.motion.speed
   }
 
+  // something changed between frames
+  private wake() {
+    this.dirty = true
+    this.requestFrame()
+  }
+
+  // the point on the floor under the pointer, the spine at x = 0
+  private pointAt(clientX: number, clientY: number) {
+    if (!this.input.ray(clientX, clientY, this.ray)) return null
+    return floorPoint(this.group, this.ray, this.hit)
+  }
+
   // how far a sheet may bend before its far corner rolls over itself
   private arcLimit(angleDeg: number) {
     const t = (Math.abs(angleDeg) * Math.PI) / 180
@@ -228,11 +242,11 @@ export class SpreadEngine implements Engine {
     return this.flights.some((f) => f.index === index)
   }
 
-  // which sheet a press at this x would pick up
-  private sheetAt(clientX: number) {
-    const rect = this.canvas.getBoundingClientRect()
-    const spineX = this.spine.set(0, 0, 0).project(this.camera).x
-    const forward = clientX >= rect.left + (0.5 * spineX + 0.5) * rect.width
+  // which sheet a press here would pick up
+  private sheetAt(clientX: number, clientY: number) {
+    const point = this.pointAt(clientX, clientY)
+    if (!point) return null
+    const forward = point.x >= 0
     if (forward ? this.current >= this.sheets.length : this.current <= 0) return null
     return { index: forward ? this.current : this.current - 1, forward }
   }
@@ -242,10 +256,7 @@ export class SpreadEngine implements Engine {
   private curveFor(clientX: number, clientY: number, index: number): Curve {
     const wobble = this.sheets[index].wobble
     const maxTilt = this.settings.motion.maxTilt
-    const rect = this.canvas.getBoundingClientRect()
-    this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1)
-    this.raycaster.setFromCamera(this.ndc, this.camera)
-    const hit = this.raycaster.ray.intersectPlane(this.floor, this.hit)
+    const hit = this.pointAt(clientX, clientY)
 
     let angleDeg = 0
     if (hit) {
@@ -288,7 +299,7 @@ export class SpreadEngine implements Engine {
     this.leader = index
     this.sheets[index].wobble = this.randomWobble()
     this.current = toProgress === 1 ? index + 1 : index
-    this.dirty = true
+    this.wake()
   }
 
   private fly(index: number, forward: boolean, toProgress: number, flipTime = CLICK.flipTime) {
@@ -329,13 +340,13 @@ export class SpreadEngine implements Engine {
       sheet.progress = sheet.index < this.current ? 1 : 0
       sheet.direction = sheet.directionSmooth = 1
     }
-    this.dirty = true
+    this.wake()
   }
 
   // --- input ------------------------------------------------------------------
 
   private bindInput() {
-    const el = this.hitArea
+    const el = this.input.element
     const signal = this.abort.signal
     const { interaction } = this.settings
 
@@ -346,13 +357,13 @@ export class SpreadEngine implements Engine {
         if (this.hold && this.moved(e, this.hold.fired ? HOLD.moveSlopPx : undefined)) this.cancelHold()
         if (this.drag && this.press) {
           if (!interaction.drag) return
-          const dx = e.clientX - this.press.x
+          const dx = this.metrics.dragDelta?.(e.clientX - this.press.x, e.clientY - this.press.y) ?? e.clientX - this.press.x
           this.drag.progress = clamp(this.drag.base - dx / this.drag.rectWidth / this.settings.motion.dragDistance, 0, 1)
           this.drag.targetCurve = this.curveFor(e.clientX, e.clientY, this.drag.index)
         } else if (e.pointerType === 'mouse') {
-          this.hover = { active: true, x: e.clientX, y: e.clientY }
+          this.hover = { active: this.input.covers(e.clientX, e.clientY), x: e.clientX, y: e.clientY }
         }
-        this.dirty = true
+        this.wake()
       },
       { signal },
     )
@@ -361,7 +372,7 @@ export class SpreadEngine implements Engine {
       'pointerleave',
       () => {
         this.hover.active = false
-        this.dirty = true
+        this.wake()
       },
       { signal },
     )
@@ -372,7 +383,8 @@ export class SpreadEngine implements Engine {
         // a second finger doesn't take over; a new primary pointer means the old one is gone
         if (this.press && !e.isPrimary) return
         if (e.button !== 0 || !(interaction.drag || interaction.click || interaction.hold)) return
-        const target = this.sheetAt(e.clientX)
+        if (!this.input.covers(e.clientX, e.clientY)) return
+        const target = this.sheetAt(e.clientX, e.clientY)
         if (!target) return
         const sheet = this.sheets[target.index]
         if (!this.inFlight(target.index)) this.setCurve(sheet, this.curveFor(e.clientX, e.clientY, target.index), true)
@@ -402,7 +414,7 @@ export class SpreadEngine implements Engine {
         try {
           el.setPointerCapture(e.pointerId)
         } catch {}
-        this.dirty = true
+        this.wake()
       },
       { signal },
     )
@@ -454,8 +466,9 @@ export class SpreadEngine implements Engine {
     this.drag = null
     this.press = null
     try {
-      this.hitArea.releasePointerCapture(e.pointerId)
+      this.input.element.releasePointerCapture(e.pointerId)
     } catch {}
+    this.wake()
     if (!drag) return
     const { interaction } = this.settings
 
@@ -528,7 +541,7 @@ export class SpreadEngine implements Engine {
     const { hoverLift } = this.settings.motion
     const previous = this.hovered
     const canHover = this.settings.interaction.hover && hoverLift > 0
-    const target = canHover && this.hover.active && !this.drag && !this.hold ? this.sheetAt(this.hover.x) : null
+    const target = canHover && this.hover.active && !this.drag && !this.hold ? this.sheetAt(this.hover.x, this.hover.y) : null
     this.hovered = target && !this.inFlight(target.index) ? target.index : -1
     if (this.hovered !== -1) {
       const sheet = this.sheets[this.hovered]

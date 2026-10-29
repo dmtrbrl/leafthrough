@@ -2,7 +2,8 @@
 
 A 3D magazine you can flip through. Pages are printed paper: they bend, roll, catch the
 light and cast shadows. Built on three.js, written in TypeScript, with bindings for React,
-Vue, Svelte, and a Web Component for everything else (Angular, Solid, Lit, plain HTML).
+Vue, Svelte, and a Web Component for everything else (Angular, Solid, Lit, plain HTML). It
+can also be [one object in your own three.js scene](#in-your-own-threejs-scene).
 
 **[Live demo](https://dmtrbrl.github.io/leafthrough/)**, with one page per binding and a dev panel
 for every option, method and event.
@@ -136,6 +137,63 @@ error trackers listen. To register the element under another tag, call
 
 **Solid**: `<leaf-through prop:pages={pages()} on:pagechange={(e) => setPage(e.detail.page)} />`.
 
+## In your own three.js scene
+
+`LeafThroughObject` is the magazine as a `THREE.Group`, for a scene you already have: a
+booklet in a CD case, a magazine on a desk. It draws with your renderer and takes pointer
+input through your camera, so it turns wherever it lies, however it's moved, turned or
+scaled. Every option, method and event of `LeafThrough` works the same, apart from those
+about its own canvas and DOM (`bleed`, `maxPixelRatio`, `plain`, `label`,
+`formatPageLabel`).
+
+```ts
+import { LeafThroughObject } from 'leafthrough'
+
+const magazine = new LeafThroughObject({ renderer, camera }, { pages, layout: 'spread', pageAspect: 1 })
+magazine.rotation.x = -Math.PI / 2   // lay it on the table
+magazine.scale.setScalar(0.12)        // a page 12 cm wide, in a scene measured in metres
+scene.add(magazine)
+
+renderer.setAnimationLoop((now) => {
+  magazine.tick(now)   // advance the pages, then draw as usual
+  renderer.render(scene, camera)
+})
+```
+
+- **Units.** A page is 1 wide and `pageAspect` tall. The spine runs up the y axis at
+  x = 0 and the pages lie on the z = 0 plane, facing +z. A closed spread shows its cover
+  at x 0 to 1. `magazine.bounds.pages` is the pages at rest, the rectangle to frame with
+  your camera; `magazine.bounds.reach` is everything a turning page sweeps through.
+- **Input.** The magazine listens for pointer events on `renderer.domElement` (or the
+  `domElement` you pass). A press it takes is one on its pages, which you can test with
+  `magazine.covers(clientX, clientY)`; check that in your own handlers to leave such
+  presses alone. Hide the magazine (`visible = false`, on it or a parent) and it takes
+  none. With `interaction.keyboard: true` the keys work while that element has focus; a
+  canvas usually doesn't take focus, so use `'global'`.
+- **Light.** The paper is a `MeshStandardMaterial`, lit by your scene's lights,
+  environment, fog and tone mapping. Of the `lighting` options, `sun.position` (in the
+  magazine's own units) steers the paper's shading and `shadows` makes the sheets cast
+  and receive shadows when your renderer draws them.
+- **Rendering on demand.** If you only draw when something changes, listen for `change`:
+  it fires when input, loading or a method call needs a frame. Then keep drawing while
+  `tick()` returns true.
+
+```ts
+magazine.tick(now)                       // advance; true while the pages still move
+magazine.covers(e.clientX, e.clientY)    // whether a press there lands on the pages
+magazine.bounds                          // { pages, reach }, in the magazine's own units
+magazine.camera = otherCamera            // cast input from another camera
+magazine.enabled = false                 // cancel active gestures and stop taking pointer/key input
+magazine.addEventListener('change', () => requestRender())
+magazine.addEventListener('pagechange', (e) => e.detail)   // also ready, pageload, error
+magazine.dispose()                       // free everything and leave the scene
+```
+
+The [three.js demo](https://dmtrbrl.github.io/leafthrough/three.html) takes a magazine
+out of a portrait paperboard mailer on a table; its source is
+[`demo/main-three.ts`](demo/main-three.ts), with the native three.js mailer geometry in
+[`demo/envelope.ts`](demo/envelope.ts).
+
 ## Sizing
 
 The magazine fills the element you give it and keeps its proportions, centred.
@@ -188,6 +246,7 @@ The magazine fills the element you give it and keeps its proportions, centred.
 | `backColor`               | `#fcfcf9`                   | Unprinted paper: the blank back of single-layout pages, and transparent parts of page images.                |
 | `wrinkles`                | `1`                         | Waviness of resting sheets; `0` lays them flat.                                                              |
 | `bulge`                   | `1`                         | How much pages rise off the spine.                                                                           |
+| `cutout`                  | `false`                     | Cuts each sheet to the shape of its front page: transparent areas are no paper at all, shadow included.      |
 
 **`lighting`**: `ambient: { sky, ground, intensity }`, `sun: { color, intensity, position }`,
 `shadows` (default `true`), `shadowMapSize` (default `2048`), and `floorShadow`. That last
@@ -264,7 +323,8 @@ pages: [
   readers get both, and changing them doesn't reload anything.
 - **Transparent artwork.** PNG and WebP alpha is composited onto the paper: transparent
   areas are unprinted paper in `paper.backColor`, including when the reverse side shows
-  through.
+  through. With `paper.cutout`, they're cut away instead, so a sheet can be any shape: its
+  front page's outline (draw the back page as its mirror image).
 - **Cross-origin URLs.** URLs on another origin need CORS headers, because the images are
   uploaded to WebGL.
 - **Textures.** A three.js `Texture` you pass in is never disposed, but the magazine sets its
@@ -303,7 +363,7 @@ magazine also switches to it by itself when the browser can't run WebGL.
 
 ```bash
 npm install
-npm run dev          # demo playground: a page per binding, each with the dev panel
+npm run dev          # demo playground: a page per binding, each with the dev panel, and a three.js scene
 npm run typecheck
 npm test             # browser tests in headless Chromium (first run: npx playwright install chromium)
 npm run build        # dist/: ESM bundles + type declarations
@@ -329,7 +389,12 @@ How it works:
 - `textures.ts` loads, prioritises and unloads page textures.
 - `src/paper` holds the shared paper material and the procedural grain.
 - `LeafThrough.ts` handles the DOM, sizing, loading, layout switching, keyboard and
-  events.
+  events. `LeafThroughObject.ts` does the same inside someone else's scene, without the DOM.
+- Engines take input through `EngineInput` (`engine.ts`): an element to listen on, a ray
+  for a point on screen, and whether a press lands on the pages. They meet the ray with
+  their own floor plane, so the same code serves the magazine's own camera and any scene's.
+- `navigation.ts` maps pages to engine positions, riffles an animated `goTo()` and binds
+  the keyboard, for both.
 
 ## Credits
 

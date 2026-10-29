@@ -48,6 +48,12 @@ export interface PaperOptions {
   wrinkles?: number
   /** Scales how much resting pages bulge up off the spine. Default `1`. */
   bulge?: number
+  /**
+   * Cuts each sheet to the shape of its front page: where that image is transparent there's no
+   * paper, so the sheet and its shadow take its outline (a die-cut cover, a flap). Default
+   * `false`: transparent areas are unprinted paper.
+   */
+  cutout?: boolean
 }
 
 export interface LightingOptions {
@@ -219,6 +225,7 @@ export function resolveSettings(options: LeafThroughOptions, layout: Layout, pre
       backColor: paper.backColor ?? '#fcfcf9',
       wrinkles: paper.wrinkles ?? 1,
       bulge: paper.bulge ?? 1,
+      cutout: paper.cutout ?? false,
     },
     lighting: {
       ambient: {
@@ -254,4 +261,51 @@ export function resolveSettings(options: LeafThroughOptions, layout: Layout, pre
     },
     maxPixelRatio: options.maxPixelRatio ?? 3,
   }
+}
+
+/** Options that don't need a rebuild (pages only need one when their images change). */
+export const LIVE_OPTIONS = new Set<keyof LeafThroughOptions>([
+  'onPageChange',
+  'onReady',
+  'onPageLoad',
+  'onError',
+  'formatPageLabel',
+  'label',
+  'startPage',
+  'preload',
+  'pages',
+])
+
+/** How many pages either side of the visible ones load, from the `preload` option. */
+export function preloadRadius(preload: number | undefined) {
+  const radius = preload ?? 6
+  return Number.isNaN(radius) ? 6 : Math.max(0, radius)
+}
+
+// Copies the plain objects and arrays, keeping everything else (textures, elements) as is.
+// Comparing against a copy sees changes made in place, such as Vue's reactive objects.
+export function snapshot<T>(value: T): T {
+  if (typeof value !== 'object' || value === null) return value
+  if (Array.isArray(value)) return value.map(snapshot) as T
+  if (Object.getPrototypeOf(value) !== Object.prototype) return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, snapshot(item)])) as T
+}
+
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const protoA = Object.getPrototypeOf(a)
+  if (protoA !== Object.prototype && protoA !== Array.prototype) return false
+  if (protoA !== Object.getPrototypeOf(b)) return false
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+  if (keysA.length !== keysB.length) return false
+  return keysA.every((key) => deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+}
+
+/** The options that changed between two snapshots. */
+export function changedOptions<T extends object>(previous: T, next: T): (keyof T)[] {
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof T>
+  return [...keys].filter((key) => !deepEqual(previous[key], next[key]))
 }

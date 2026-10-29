@@ -13,7 +13,7 @@ export interface Internals {
   hitArea: HTMLDivElement
   renderer: THREE.WebGLRenderer
   loader: PageLoader
-  backBlank: { texture: THREE.DataTexture }
+  paper: { backBlank: { texture: THREE.DataTexture } }
   frame(now: number): void
 }
 
