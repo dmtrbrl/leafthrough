@@ -6,7 +6,8 @@ Vue, Svelte, and a Web Component for everything else (Angular, Solid, Lit, plain
 can also be [one object in your own three.js scene](#in-your-own-threejs-scene).
 
 **[Live demo](https://dmtrbrl.github.io/leafthrough/)**, with one page per binding and a dev panel
-for every option, method and event.
+for every option, method and event, and
+[a three.js scene](https://dmtrbrl.github.io/leafthrough/three.html) with the magazine in it.
 
 - **Two layouts.** `spread` is an open magazine with sheets turning over the spine.
   `single` shows one page at a time, and read pages roll up behind the magazine. `auto`
@@ -139,19 +140,19 @@ error trackers listen. To register the element under another tag, call
 
 ## In your own three.js scene
 
-`LeafThroughObject` is the magazine as a `THREE.Group`, for a scene you already have: a
-booklet in a CD case, a magazine on a desk. It draws with your renderer and takes pointer
-input through your camera, so it turns wherever it lies, however it's moved, turned or
-scaled. Every option, method and event of `LeafThrough` works the same, apart from those
-about its own canvas and DOM (`bleed`, `maxPixelRatio`, `plain`, `label`,
-`formatPageLabel`).
+`LeafThroughObject` is the magazine as a `THREE.Group`, for a scene you already have. It
+draws with your renderer and takes pointer input through your camera, so it turns wherever
+it lies, however it's moved, turned or scaled. Every option, method, property and event of
+`LeafThrough` works the same, apart from those about its own canvas and DOM: the options
+`bleed`, `maxPixelRatio`, `plain`, `label` and `formatPageLabel`, and the properties
+`plain` and `element`.
 
 ```ts
 import { LeafThroughObject } from 'leafthrough'
 
-const magazine = new LeafThroughObject({ renderer, camera }, { pages, layout: 'spread', pageAspect: 1 })
+const magazine = new LeafThroughObject({ renderer, camera }, { pages, layout: 'spread' })
 magazine.rotation.x = -Math.PI / 2   // lay it on the table
-magazine.scale.setScalar(0.12)        // a page 12 cm wide, in a scene measured in metres
+magazine.scale.setScalar(0.21)        // a page 21 cm wide, in a scene measured in metres
 scene.add(magazine)
 
 renderer.setAnimationLoop((now) => {
@@ -169,7 +170,8 @@ renderer.setAnimationLoop((now) => {
   `magazine.covers(clientX, clientY)`; check that in your own handlers to leave such
   presses alone. Hide the magazine (`visible = false`, on it or a parent) and it takes
   none. With `interaction.keyboard: true` the keys work while that element has focus; a
-  canvas usually doesn't take focus, so use `'global'`.
+  canvas only takes focus with a `tabIndex`, so give it one or use `'global'`. Drags
+  scale with the magazine's size on screen, so they feel the same near or far.
 - **Light.** The paper is a `MeshStandardMaterial`, lit by your scene's lights,
   environment, fog and tone mapping. Of the `lighting` options, `sun.position` (in the
   magazine's own units) steers the paper's shading and `shadows` makes the sheets cast
@@ -177,6 +179,9 @@ renderer.setAnimationLoop((now) => {
 - **Rendering on demand.** If you only draw when something changes, listen for `change`:
   it fires when input, loading or a method call needs a frame. Then keep drawing while
   `tick()` returns true.
+- **Accessibility is yours.** With no DOM of its own, it has no live region, no page
+  descriptions and no plain view: pages' `alt` and `text` aren't read. Describe the pages
+  in your own page, and announce `pagechange` if readers should hear it.
 
 ```ts
 magazine.tick(now)                       // advance; true while the pages still move
@@ -352,7 +357,8 @@ off screen or the tab is hidden.
 The 3D canvas is hidden from screen readers, so give pages an `alt` and their `text` (see
 [Pages](#pages)). The magazine keeps the visible pages' descriptions and text in the page,
 visually hidden, where screen readers can read them; each page is a `figure` named by
-`formatPageLabel`.
+`formatPageLabel`. `LeafThroughObject` has no DOM, so none of this comes with it (see
+[In your own three.js scene](#in-your-own-threejs-scene)).
 
 **Plain view.** `plain: true` shows the pages as flat images, with the same layouts,
 navigation, keyboard and events, and no 3D. Clicking the right half turns forward, the left
