@@ -162,20 +162,28 @@ renderer.setAnimationLoop((now) => {
 ```
 
 - **Units.** A page is 1 wide and `pageAspect` tall. The spine runs up the y axis at
-  x = 0 and the pages lie on the z = 0 plane, facing +z. A closed spread shows its cover
-  at x 0 to 1. `magazine.bounds.pages` is the pages at rest, the rectangle to frame with
-  your camera; `magazine.bounds.reach` is everything a turning page sweeps through.
+  x = 0 and the pages lie on the z = 0 plane, facing +z. A spread closed on its front
+  cover shows it at x 0 to 1, and closed on its back cover at x -1 to 0.
+  `magazine.bounds.pages` is the pages at rest, the rectangle to frame with your camera;
+  `magazine.bounds.reach` is everything a turning page sweeps through.
 - **Input.** The magazine listens for pointer events on `renderer.domElement` (or the
-  `domElement` you pass). A press it takes is one on its pages, which you can test with
-  `magazine.covers(clientX, clientY)`; check that in your own handlers to leave such
-  presses alone. Hide the magazine (`visible = false`, on it or a parent) and it takes
-  none. With `interaction.keyboard: true` the keys work while that element has focus; a
-  canvas only takes focus with a `tabIndex`, so give it one or use `'global'`. Drags
-  scale with the magazine's size on screen, so they feel the same near or far.
+  `domElement` you pass, which must show exactly the camera's view). It takes presses in
+  its hit area: the pages in `spread` (only the cover's side while closed), and in
+  `single` a box round the page with a strip left of the spine for turning back. It
+  doesn't look at your scene, so objects in front of the magazine don't block it.
+  `magazine.covers(clientX, clientY)` tells you whether it takes a press there; check that
+  in your own handlers to leave such presses alone. Hide the magazine (`visible = false`,
+  on it or a parent) and it takes none. With `interaction.keyboard: true` the keys work
+  while that element has focus; a canvas only takes focus with a `tabIndex`, so give it
+  one or use `'global'`. Drags scale with the magazine's size on screen, so they feel the
+  same near or far. For touch drags, give the element `touch-action: pan-y pinch-zoom`
+  (or `none`), so the browser doesn't take them for scrolling.
 - **Light.** The paper is a `MeshStandardMaterial`, lit by your scene's lights,
-  environment, fog and tone mapping. Of the `lighting` options, `sun.position` (in the
-  magazine's own units) steers the paper's shading and `shadows` makes the sheets cast
-  and receive shadows when your renderer draws them.
+  environment, fog and tone mapping. Of the `lighting` options, `shadows` makes the
+  sheets cast and receive shadows when your renderer draws them, and `sun.position`
+  should point towards your shadow-casting directional light, in the magazine's own
+  frame (only the direction counts). It places the shadow a turning sheet casts right by
+  the spine, where the shadow map can't.
 - **Rendering on demand.** If you only draw when something changes, listen for `change`:
   it fires when input, loading or a method call needs a frame. Then keep drawing while
   `tick()` returns true.
@@ -185,7 +193,7 @@ renderer.setAnimationLoop((now) => {
 
 ```ts
 magazine.tick(now)                       // advance; true while the pages still move
-magazine.covers(e.clientX, e.clientY)    // whether a press there lands on the pages
+magazine.covers(e.clientX, e.clientY)    // whether the magazine takes a press there
 magazine.bounds                          // { pages, reach }, in the magazine's own units
 magazine.camera = otherCamera            // cast input from another camera
 magazine.enabled = false                 // cancel active gestures and stop taking pointer/key input
@@ -196,8 +204,9 @@ magazine.dispose()                       // free everything and leave the scene
 
 The [three.js demo](https://dmtrbrl.github.io/leafthrough/three.html) takes a magazine
 out of a portrait paperboard mailer on a table; its source is
-[`demo/main-three.ts`](demo/main-three.ts), with the native three.js mailer geometry in
-[`demo/envelope.ts`](demo/envelope.ts).
+[`demo/main-three.ts`](https://github.com/dmtrbrl/leafthrough/blob/main/demo/main-three.ts),
+with the native three.js mailer geometry in
+[`demo/envelope.ts`](https://github.com/dmtrbrl/leafthrough/blob/main/demo/envelope.ts).
 
 ## Sizing
 
@@ -409,4 +418,4 @@ The page deformation and interaction model are reverse-engineered from the magaz
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/dmtrbrl/leafthrough/blob/main/LICENSE)
