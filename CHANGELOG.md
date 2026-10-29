@@ -6,6 +6,14 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.5]
+
+- Docs for `LeafThroughObject`: `sun.position` points towards your shadow-casting light,
+  where it places the shadow a turning sheet casts by the spine (it doesn't shade the paper).
+  The README also covers its hit area, touch dragging, a custom `domElement`, keyboard focus
+  and what it leaves to you for accessibility.
+- README links to source files open them on GitHub, also from npm.
+
 ## [0.1.4]
 
 - `LeafThroughObject`: the magazine as a `THREE.Group` for your own three.js scene. It draws
@@ -14,7 +22,7 @@ All notable changes to this package. The format follows
   your render loop, a `change` event asks for frames when you render on demand, `covers()`
   tells your own pointer handlers which presses are the magazine's, `enabled` turns its input
   off and on, and `bounds` gives its size for framing. See
-  [In your own three.js scene](README.md#in-your-own-threejs-scene).
+  [In your own three.js scene](https://github.com/dmtrbrl/leafthrough#in-your-own-threejs-scene).
 - `paper.cutout`: cuts each sheet to the shape of its front page, so transparent areas are no
   paper at all and the shadow follows the outline. Off by default.
 - A three.js demo page: a magazine slides right out of a portrait paperboard mailer, with

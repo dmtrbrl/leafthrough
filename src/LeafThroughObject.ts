@@ -24,8 +24,9 @@ import { PageLoader } from './textures.js'
 
 /**
  * The magazine's options, less those about its own canvas and DOM. Of `lighting`, only
- * `sun.position` (which way the paper is shaded) and `shadows` (whether sheets cast and
- * receive them) apply: the lights are your scene's.
+ * `shadows` (whether sheets cast and receive them) and `sun.position` apply: the lights are
+ * your scene's. Point `sun.position` towards your shadow-casting directional light, in the
+ * magazine's own frame; it places the shadow a turning sheet casts right by the spine.
  */
 export type LeafThroughObjectOptions = Omit<LeafThroughOptions, 'bleed' | 'maxPixelRatio' | 'plain' | 'label' | 'formatPageLabel'>
 
