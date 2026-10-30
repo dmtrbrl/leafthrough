@@ -461,15 +461,17 @@ test('deform: new uniform values or objects apply in place, new GLSL rebuilds', 
     expect(viewOf(m).engine).not.toBe(engine)
   }))
 
+// The depth pass's shader stands in for the distance pass's too: three.js renamed that one
+// (0.160 calls it distanceRGBA), and both have the chunks the paper hooks into.
 test('without a deform the shaders are as before; with one, every pass applies it', () => {
-  const compile = (material: THREE.Material, shader: 'standard' | 'depth' | 'distance') => {
+  const compile = (material: THREE.Material, shader: 'standard' | 'depth') => {
     const program = { uniforms: {}, vertexShader: THREE.ShaderLib[shader].vertexShader, fragmentShader: THREE.ShaderLib[shader].fragmentShader }
     material.onBeforeCompile(program as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer)
     return program.vertexShader
   }
   const shaders = (m: LeafThroughObject) => {
     const mesh = viewOf(m).engine.sheets[0].mesh
-    return [compile(mesh.material as THREE.Material, 'standard'), compile(mesh.customDepthMaterial!, 'depth'), compile(mesh.customDistanceMaterial!, 'distance')]
+    return [compile(mesh.material as THREE.Material, 'standard'), compile(mesh.customDepthMaterial!, 'depth'), compile(mesh.customDistanceMaterial!, 'depth')]
   }
   return withObject({}, (plain) => {
     for (const shader of shaders(plain)) expect(shader).not.toContain('deformSheet')
