@@ -145,7 +145,9 @@ draws with your renderer and takes pointer input through your camera, so it turn
 it lies, however it's moved, turned or scaled. Every option, method, property and event of
 `LeafThrough` works the same, apart from those about its own canvas and DOM: the options
 `bleed`, `maxPixelRatio`, `plain`, `label` and `formatPageLabel`, and the properties
-`plain` and `element`.
+`plain` and `element`. It has one option of its own, `deform`
+([Reshaping the paper](#reshaping-the-paper)), and its sheets stand apart by default
+([Depth](#depth)).
 
 ```ts
 import { LeafThroughObject } from 'leafthrough'
@@ -183,7 +185,11 @@ renderer.setAnimationLoop((now) => {
   sheets cast and receive shadows when your renderer draws them, and `sun.position`
   should point towards your shadow-casting directional light, in the magazine's own
   frame (only the direction counts). It places the shadow a turning sheet casts right by
-  the spine, where the shadow map can't.
+  the spine, where the shadow map can't. `update({ lighting: { shadows } })` switches the
+  sheets' shadows without a rebuild. Use it rather than setting `castShadow` or
+  `receiveShadow` on the sheets, which the magazine sets itself.
+- **Depth.** See [Depth](#depth): the sheets stand a little apart, which needs enough depth
+  precision from your camera.
 - **Rendering on demand.** If you only draw when something changes, listen for `change`:
   it fires when input, loading or a method call needs a frame. Then keep drawing while
   `tick()` returns true.
@@ -197,10 +203,71 @@ magazine.covers(e.clientX, e.clientY)    // whether the magazine takes a press t
 magazine.bounds                          // { pages, reach }, in the magazine's own units
 magazine.camera = otherCamera            // cast input from another camera
 magazine.enabled = false                 // cancel active gestures and stop taking pointer/key input
+magazine.update({ lighting: { shadows: false } })   // sheets stop casting and receiving, no rebuild
 magazine.addEventListener('change', () => requestRender())
 magazine.addEventListener('pagechange', (e) => e.detail)   // also ready, pageload, error
 magazine.dispose()                       // free everything and leave the scene
 ```
+
+### Depth
+
+In a `LeafThroughObject` the sheets stand apart, `paper.sheetGap` `0.0005` page widths
+(0.1 mm paper on a 210 mm page), and sort by their real depth, so they stay in order from the front, from
+behind and at any angle. Your camera has to resolve that gap. A 24-bit depth buffer tells
+apart points roughly `distance² / (near × 16,777,216)` apart, in your scene's units, and that
+must be well under the gap in the same units. Take a booklet 120 mm wide in a scene in
+metres, seen from 4.4 m: its gap is 0.06 mm. With the camera's `near` at 0.1 the buffer
+resolves about 0.012 mm, which is enough; at 0.01 it's about 0.12 mm, and hidden pages
+flicker through. So keep `near` as large as your scene allows; `far` matters much less.
+The magazine never changes your camera. With a coarse depth buffer you can widen the gap.
+
+The standalone magazine instead draws sheets that touch at the spine and lets
+`paper.depthBias` sort them: a polygon offset brings each sheet nearer the camera than
+those under it. You can turn that on here too (`paper: { sheetGap: 0, depthBias: true }`),
+but it has two limits in a scene of your own. It assumes the magazine is seen from the
+front, so from behind it brings the wrong sheets forward. And it moves sheets by steps of
+the depth buffer, so how far depends on `near`, `far` and distance: with a small `near`
+it can pull pages through whatever lies just in front of the magazine.
+
+### Reshaping the paper
+
+Experimental: this may change in a patch release. `deform` reshapes the paper with your
+own GLSL, after the magazine has shaped it: bend a booklet coming out of its case, squeeze
+it, roll it. It applies wherever the paper is drawn, in colour and in the shadow passes,
+and lighting follows, because normals come from the deformed shape.
+
+```ts
+const bend = { value: 0 }
+const magazine = new LeafThroughObject({ renderer, camera }, {
+  pages,
+  deform: {
+    uniforms: { uBend: bend },
+    glsl: /* glsl */ `
+      uniform float uBend;
+      vec3 deformSheet(vec3 p, vec2 uv) {
+        // curl the pages up along x, around a cylinder of radius 1 / uBend
+        if (uBend < 1e-4) return p;
+        float a = p.x * uBend;
+        float r = 1.0 / uBend - p.z;
+        return vec3(r * sin(a), p.y, 1.0 / uBend - r * cos(a));
+      }`,
+  },
+})
+
+bend.value = 1.2   // read on the next frame: no rebuild
+```
+
+- `deformSheet` gets `p`, a point of a sheet in the magazine's own units (see Units
+  above), and `uv`, where it is on that sheet: x from the spine (0) to the outer edge (1),
+  y from bottom to top. It returns where to draw that point, in the same units.
+- three.js's common GLSL (`PI`, `saturate` and so on) is available. Name your uniforms
+  with a prefix of your own, as the magazine's start with `u`.
+- Uniforms are read every frame: set `value` on your own objects, or pass new objects
+  under the same names through `update()`. Changing the GLSL, or which uniforms there are,
+  rebuilds the pages.
+- It changes only what's drawn. Pointer input, `covers()`, `bounds` and the shadow a
+  turning sheet casts by the spine still work from the undeformed pages, so turn input off
+  (`enabled = false`) while the paper is far from its own shape.
 
 The [three.js demo](https://dmtrbrl.github.io/leafthrough/three.html) takes a magazine
 out of a portrait paperboard mailer on a table; its source is
@@ -261,6 +328,8 @@ The magazine fills the element you give it and keeps its proportions, centred.
 | `wrinkles`                | `1`                         | Waviness of resting sheets; `0` lays them flat.                                                              |
 | `bulge`                   | `1`                         | How much pages rise off the spine.                                                                           |
 | `cutout`                  | `false`                     | Cuts each sheet to the shape of its front page: transparent areas are no paper at all, shadow included.      |
+| `sheetGap`                | `0` (`0.0005` in a scene)   | Space between stacked sheets, in page widths. 0.1 mm paper on a 120 mm page is `0.1 / 120`.                  |
+| `depthBias`               | `true` (`false` in a scene) | Draws each sheet nearer the camera than those under it, so sheets touching at the spine don't flicker. See [Depth](#depth). |
 
 **`lighting`**: `ambient: { sky, ground, intensity }`, `sun: { color, intensity, position }`,
 `shadows` (default `true`), `shadowMapSize` (default `2048`), and `floorShadow`. That last
@@ -311,7 +380,8 @@ magazine.addEventListener('error', (e) => e.detail)       // { error, page }
 
 Both compare options by value. Changing callbacks or the label is free. Changing `pages`,
 `layout`, paper, lighting, motion or interaction rebuilds the scene (a few milliseconds)
-and keeps the reader on the same page. `startPage` only applies at creation; use `goTo()`
+and keeps the reader on the same page. In a `LeafThroughObject`, `lighting.shadows` and
+new values for `deform`'s uniforms apply without a rebuild. `startPage` only applies at creation; use `goTo()`
 after that. The React, Vue and Svelte bindings and the element use `setOptions()`, so
 removing a prop or attribute restores its default. Options are copied on every call, so an
 object or array changed in place and passed again (as Vue's reactive props are) counts as
@@ -402,7 +472,10 @@ How it works:
 - `content.ts` keeps the visible pages' content as DOM: hidden for screen readers in 3D,
   the pages themselves in the plain view.
 - `textures.ts` loads, prioritises and unloads page textures.
-- `src/paper` holds the shared paper material and the procedural grain.
+- `src/paper` holds the shared paper material and the procedural grain. Sheets keep their
+  order by real depth, each lifted by `paper.sheetGap` for the sheets under it, or by a
+  polygon offset (`layerSheet`) where they touch. `deform` wraps the layout's sheet shape
+  in every pass.
 - `LeafThrough.ts` handles the DOM, sizing, loading, layout switching, keyboard and
   events. `LeafThroughObject.ts` does the same inside someone else's scene, without the DOM.
 - Engines take input through `EngineInput` (`engine.ts`): an element to listen on, a ray
@@ -410,6 +483,8 @@ How it works:
   their own floor plane, so the same code serves the magazine's own camera and any scene's.
 - `navigation.ts` maps pages to engine positions, riffles an animated `goTo()` and binds
   the keyboard, for both.
+- `test/depth.test.ts` prints the pages that should be hidden pure red and checks that
+  none shows, across layouts, views, paper shapes, turns and camera depth ranges.
 
 ## Credits
 

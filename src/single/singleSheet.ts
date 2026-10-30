@@ -15,6 +15,7 @@ const vertexChunk = /* glsl */ `
   uniform float uTailBend; // how far the free end bows back
   uniform vec3 uCone; // radius change per unit of y, radius at the top, how far to wrap
   uniform vec2 uFlipRotation;
+  uniform float uStackGap; // how far the sheet stands off the spine, along its own normal
 
   float sheetPileLift(float x) {
     float t = 1.0 - min(x / uPileLift.x, 1.0);
@@ -100,7 +101,7 @@ const vertexChunk = /* glsl */ `
     }
 
     // spin about the spine
-    float z = shape.z + pile.z;
+    float z = shape.z + pile.z + uStackGap;
     return vec3(
       shape.x * uFlipRotation.x - z * uFlipRotation.y,
       shape.y,
@@ -134,11 +135,13 @@ export interface SingleSheetUniforms extends SheetUniforms {
   uCone: THREE.IUniform<THREE.Vector3>
   uFlipRotation: THREE.IUniform<THREE.Vector2>
   uTrim: THREE.IUniform<THREE.Vector3>
+  uStackGap: THREE.IUniform<number>
   uFront: THREE.IUniform<THREE.Texture>
   uBack: THREE.IUniform<THREE.Texture>
   uPattern: THREE.IUniform<THREE.Texture>
   uSpineContact: THREE.IUniform<THREE.Vector3>
   uLightDirection: THREE.IUniform<THREE.Vector3>
+  uSheetOrigin: THREE.IUniform<THREE.Vector3>
 }
 
 export function createSingleSheet(
@@ -158,11 +161,13 @@ export function createSingleSheet(
     uCone: { value: new THREE.Vector3(0, 1, 0) },
     uFlipRotation: { value: new THREE.Vector2(1, 0) },
     uTrim: { value: new THREE.Vector3(0, 1, 1) },
+    uStackGap: { value: 0 },
     uFront: { value: front },
     uBack: { value: back },
     uPattern: { value: pattern },
     uSpineContact: shading.spineContact,
     uLightDirection: shading.lightDirection,
+    uSheetOrigin: shading.origin,
   }
   const mesh = createSheetMesh(
     geometry,

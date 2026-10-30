@@ -20,5 +20,6 @@ export {
   type PageDescriptor,
   type PageImage,
   type PageSource,
+  type PaperDeform,
   type PaperOptions,
 } from './options.js'

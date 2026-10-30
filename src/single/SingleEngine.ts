@@ -127,6 +127,7 @@ export class SingleEngine implements Engine {
   private readonly fallDelay: number
   private readonly fallDuration: number
   private readonly abort = new AbortController()
+  private readonly shading: EngineContext['shading']
 
   private current: number
   private turned = 0 // sum of every sheet's progress, as of the last update
@@ -149,6 +150,7 @@ export class SingleEngine implements Engine {
     this.input = ctx.input
     this.metrics = ctx.metrics
     this.requestFrame = ctx.requestFrame
+    this.shading = ctx.shading
     this.count = ctx.textures.length
     this.maxPosition = this.count
     this.current = clamp(Math.round(ctx.position), 0, Math.max(this.count - 1, 0)) // pages turned
@@ -242,6 +244,12 @@ export class SingleEngine implements Engine {
     this.cancelHold()
     this.touch = null
     if (this.press) this.release(new PointerEvent('pointercancel', { pointerId: this.press.id }))
+    this.wake()
+  }
+
+  setShadows(on: boolean) {
+    this.settings.lighting.shadows = on
+    for (const sheet of this.sheets) sheet.mesh.castShadow = sheet.mesh.receiveShadow = on
     this.wake()
   }
 
@@ -653,13 +661,15 @@ export class SingleEngine implements Engine {
     for (const sheet of this.sheets) {
       const i = sheet.index
       sheet.mesh.visible = closing || i <= pileFrom + PILE.renderDepth || this.busy(sheet)
-      layerSheet(sheet.mesh, i < this.current ? this.current - 1 - i : i - this.current, this.count, this.busy(sheet))
+      const depth = i < this.current ? this.current - 1 - i : i - this.current
+      layerSheet(sheet.mesh, depth, this.count, this.busy(sheet), this.settings.paper.depthBias)
     }
 
     // the book eases back and to the right as the read pages pile up behind it
     const read = smooth(this.count > 1 ? this.paced(turned) / (this.count - 1) : 0) * (1 - this.shutting(turned))
     this.group.position.x = BOOK.pushRight * read
     this.group.position.z = -BOOK.pushBack * read
+    this.shading.origin.value.copy(this.group.position)
 
     this.dirty = false
     return true
@@ -749,6 +759,18 @@ export class SingleEngine implements Engine {
       topReach = Math.min(topReach, edge.top)
     }
     u.uPileReach.value.set(bottomReach, topReach)
+
+    // Each sheet stands off the spine along its own normal, so the offset turns with it: by the
+    // sheets under it while it's on the pile, by the read pages that went round before it once
+    // it's rolled up (the older, the further out, like their rolls). A page going round moves
+    // from one to the other as it turns, and the pages before it make room. Settled flat under
+    // the pile they keep the height they came round at, and all go back to their place in the
+    // closed magazine as it shuts.
+    const under = P - 1 - sheet.index
+    const before = Math.max(0, turned - 1 - sheet.index)
+    const around = smooth(T)
+    const offset = fallen ? before * Math.cos(spineOpen) : under + (before - under) * around
+    u.uStackGap.value = this.settings.paper.sheetGap * (offset + (under - offset) * shut)
   }
 
   // a turning page: swing round the spine up to the open angle, then roll round the cone

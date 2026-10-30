@@ -20,6 +20,7 @@ const vertexChunk = (settings: ResolvedSettings) => /* glsl */ `
 
   const float BULGE = ${settings.paper.bulge.toFixed(4)};
   const float WRINKLE = ${(0.13 * settings.paper.wrinkles).toFixed(4)};
+  const bool NESTED = ${settings.paper.depthBias ? 'false' : 'true'};
 
   uniform float uFlipProgress;
   uniform float uWrinkleSide;
@@ -29,6 +30,7 @@ const vertexChunk = (settings: ResolvedSettings) => /* glsl */ `
   uniform vec2 uFlipRotation;
   uniform float uDirection;
   uniform float uStackLift;
+  uniform float uStackGap;
 
   attribute vec3 aNoise;
 
@@ -45,8 +47,11 @@ const vertexChunk = (settings: ResolvedSettings) => /* glsl */ `
     float y = (uv.y - 0.5) * SHEET_ASPECT;
 
     // Every sheet shares the same wrinkles and bulge, scaled by its place in the stack,
-    // so stacked sheets nest inside each other instead of crossing.
-    float wrinkle = (mix(noise, 1.0 - noise, uFlipProgress) - 0.5) * smoothstep(0.0, 0.35, x) * WRINKLE * uStackLift;
+    // so stacked sheets nest inside each other instead of crossing. Where a wrinkle dips, a
+    // bigger one dips below the sheets under it, which only the depth bias hides; without it
+    // the dips are the same on every sheet.
+    float wrinkle = uWrinkleSide * (mix(noise, 1.0 - noise, uFlipProgress) - 0.5) * smoothstep(0.0, 0.35, x) * WRINKLE;
+    wrinkle *= NESTED && wrinkle < 0.0 ? 1.0 : uStackLift;
     float lift = sheetRestingLift(x) * BULGE * uStackLift;
 
     // bend with constant curvature past the fold line, trailing against the turn
@@ -64,7 +69,7 @@ const vertexChunk = (settings: ResolvedSettings) => /* glsl */ `
     // turn about the spine
     p = vec3(p.x * uFlipRotation.x - p.z * uFlipRotation.y, p.y, p.x * uFlipRotation.y + p.z * uFlipRotation.x);
 
-    p.z += lift + uWrinkleSide * wrinkle;
+    p.z += lift + wrinkle + uStackGap;
     return p;
   }
 `
@@ -125,11 +130,13 @@ export interface SpreadSheetUniforms extends SheetUniforms {
   uFlipRotation: THREE.IUniform<THREE.Vector2>
   uDirection: THREE.IUniform<number>
   uStackLift: THREE.IUniform<number>
+  uStackGap: THREE.IUniform<number>
   uFront: THREE.IUniform<THREE.Texture>
   uBack: THREE.IUniform<THREE.Texture>
   uPattern: THREE.IUniform<THREE.Texture>
   uSpineContact: THREE.IUniform<THREE.Vector3>
   uLightDirection: THREE.IUniform<THREE.Vector3>
+  uSheetOrigin: THREE.IUniform<THREE.Vector3>
 }
 
 export function createSpreadSheet(
@@ -149,11 +156,13 @@ export function createSpreadSheet(
     uFlipRotation: { value: new THREE.Vector2(1, 0) },
     uDirection: { value: 1 },
     uStackLift: { value: 1 },
+    uStackGap: { value: 0 },
     uFront: { value: front },
     uBack: { value: back },
     uPattern: { value: pattern },
     uSpineContact: shading.spineContact,
     uLightDirection: shading.lightDirection,
+    uSheetOrigin: shading.origin,
   }
   const mesh = createSheetMesh(
     geometry,

@@ -58,6 +58,8 @@ export interface Engine {
   /** Moves to a position at once, without animating. */
   jumpTo(position: number): void
   setPageTexture(page: number, texture: THREE.Texture): void
+  /** Turns the sheets' shadows on or off, both casting and receiving, without a rebuild. */
+  setShadows?(on: boolean): void
   /** Releases pointer capture and cancels active gestures and hold timers. */
   cancelInput?(): void
   dispose(): void

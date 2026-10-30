@@ -1,4 +1,4 @@
-import type { ColorRepresentation, Texture } from 'three'
+import type { ColorRepresentation, IUniform, Texture } from 'three'
 
 /** Anything a page can be printed from. Strings are image URLs. */
 export type PageImage = string | HTMLImageElement | HTMLCanvasElement | ImageBitmap | Texture
@@ -54,6 +54,36 @@ export interface PaperOptions {
    * `false`: transparent areas are unprinted paper.
    */
   cutout?: boolean
+  /**
+   * Space between stacked sheets, in page widths. Sheets otherwise meet at the spine, where only
+   * `depthBias` keeps the right one in front. A booklet 120 mm wide with 0.1 mm paper is
+   * `0.1 / 120`. Default `0`, or `0.0005` in a `LeafThroughObject`.
+   */
+  sheetGap?: number
+  /**
+   * Draws each sheet a little nearer the camera than the sheets under it (a polygon offset), so
+   * sheets that touch at the spine don't flicker through each other. It assumes the magazine is
+   * seen from the front, and in a scene of your own it can pull pages through what lies just in
+   * front of them. How far it moves a sheet depends on the camera's near and far planes. With
+   * a `sheetGap`, turn it off. Default `true`, or `false` in a `LeafThroughObject`.
+   */
+  depthBias?: boolean
+}
+
+/**
+ * Reshapes the paper in your own GLSL, after the magazine has shaped it. Experimental: it may
+ * change in a patch release.
+ */
+export interface PaperDeform {
+  /**
+   * Declares the uniforms it reads and defines `vec3 deformSheet(vec3 p, vec2 uv)`. `p` is a
+   * point of a sheet in the magazine's own units (a page is 1 wide, the spine runs up the y
+   * axis, the pages lie on z = 0 facing +z) and `uv` where it is on the sheet (x from the spine
+   * to the outer edge). Return where to draw it, in the same units.
+   */
+  glsl: string
+  /** The uniforms `glsl` declares, by name. Change their `value` any time: they're read every frame. */
+  uniforms?: Record<string, IUniform>
 }
 
 export interface LightingOptions {
@@ -189,6 +219,8 @@ export interface ResolvedSettings {
   loop: boolean
   bleed: boolean
   paper: Required<Omit<PaperOptions, 'grain'>> & { grain: PaperOptions['grain'] }
+  /** Only a `LeafThroughObject` has one. */
+  deform: PaperDeform | null
   lighting: {
     ambient: { sky: ColorRepresentation; ground: ColorRepresentation; intensity: number }
     sun: { color: ColorRepresentation; intensity: number; position: [number, number, number] }
@@ -226,7 +258,10 @@ export function resolveSettings(options: LeafThroughOptions, layout: Layout, pre
       wrinkles: paper.wrinkles ?? 1,
       bulge: paper.bulge ?? 1,
       cutout: paper.cutout ?? false,
+      sheetGap: Math.max(0, paper.sheetGap ?? 0),
+      depthBias: paper.depthBias ?? true,
     },
+    deform: null,
     lighting: {
       ambient: {
         sky: lighting.ambient?.sky ?? '#ffffff',

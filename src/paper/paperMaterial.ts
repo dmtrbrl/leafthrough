@@ -9,6 +9,8 @@ export interface SheetShading {
   spineContact: THREE.IUniform<THREE.Vector3>
   /** Towards the sun, in the magazine's frame. */
   lightDirection: THREE.IUniform<THREE.Vector3>
+  /** Where the sheets' group sits in the magazine's frame; the engine keeps it current. */
+  origin: THREE.IUniform<THREE.Vector3>
 }
 
 export interface SheetShader {
@@ -46,6 +48,18 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
     const vec3 BLANK_PAPER = vec3(${glslFloat(blank.r)}, ${glslFloat(blank.g)}, ${glslFloat(blank.b)});
   `
   const noiseAt = (component: string) => (shader.noise ? `aNoise.${component}` : '0.0')
+  // Without a deform the shaders are just as they'd be without the option.
+  const deform = settings.deform
+  const deformChunk = deform
+    ? `#include <common>
+      uniform vec3 uSheetOrigin;
+      ${deform.glsl}
+      vec3 sheetDeformed(vec3 p, vec2 uv) {
+        return deformSheet(p + uSheetOrigin, uv) - uSheetOrigin;
+      }`
+    : '#include <common>'
+  const deformed = (p: string, uv: string) => (deform ? `sheetDeformed(${p}, ${uv})` : p)
+  const deformUniforms = deform ? { ...deform.uniforms, uSheetOrigin: uniforms.uSheetOrigin } : {}
 
   const material = new THREE.MeshStandardMaterial({
     side: THREE.DoubleSide,
@@ -54,25 +68,29 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
   })
 
   material.onBeforeCompile = (program) => {
-    Object.assign(program.uniforms, uniforms)
+    Object.assign(program.uniforms, uniforms, deformUniforms)
 
     program.vertexShader =
       constants + shader.vertexChunk + 'varying vec2 vSheetUv;\nvarying vec3 vSheetPosition;\n' + program.vertexShader
+    // Normals come from the drawn (deformed) shape; the fragment shader's tests work on the
+    // magazine's own shape, before any deform.
     program.vertexShader = program.vertexShader
+      .replace('#include <common>', deformChunk)
       .replace(
         '#include <beginnormal_vertex>',
         `#include <beginnormal_vertex>
         vec2 sheetStep = vec2(NORMAL_EPSILON, NORMAL_EPSILON / SHEET_ASPECT);
-        vec3 sheetP = sheetPosition(uv, ${noiseAt('x')});
-        vec3 sheetPx = sheetPosition(uv + vec2(sheetStep.x, 0.0), ${noiseAt('y')});
-        vec3 sheetPy = sheetPosition(uv + vec2(0.0, sheetStep.y), ${noiseAt('z')});
+        vec3 sheetShaped = sheetPosition(uv, ${noiseAt('x')});
+        vec3 sheetP = ${deformed('sheetShaped', 'uv')};
+        vec3 sheetPx = ${deformed(`sheetPosition(uv + vec2(sheetStep.x, 0.0), ${noiseAt('y')})`, 'uv + vec2(sheetStep.x, 0.0)')};
+        vec3 sheetPy = ${deformed(`sheetPosition(uv + vec2(0.0, sheetStep.y), ${noiseAt('z')})`, 'uv + vec2(0.0, sheetStep.y)')};
         objectNormal = normalize(cross(sheetPx - sheetP, sheetPy - sheetP));`,
       )
       .replace(
         '#include <begin_vertex>',
         `vec3 transformed = sheetP;
         vSheetUv = uv;
-        vSheetPosition = sheetP;`,
+        vSheetPosition = sheetShaped;`,
       )
 
     program.fragmentShader =
@@ -171,13 +189,13 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
   // Point lights use a distance pass; directional and spot lights use a depth pass.
   // Both must draw precisely the same deformed, trimmed silhouette as the visible sheet.
   depthMaterial.onBeforeCompile = distanceMaterial.onBeforeCompile = (program) => {
-    Object.assign(program.uniforms, uniforms)
+    Object.assign(program.uniforms, uniforms, deformUniforms)
     program.vertexShader = constants + shader.vertexChunk + 'varying vec2 vSheetUv;\nvarying vec3 vSheetPosition;\n' + program.vertexShader
-    program.vertexShader = program.vertexShader.replace(
+    program.vertexShader = program.vertexShader.replace('#include <common>', deformChunk).replace(
       '#include <begin_vertex>',
       `vSheetUv = uv;
       vSheetPosition = sheetPosition(uv, ${noiseAt('x')});
-      vec3 transformed = vSheetPosition - vec3(SHADOW_OFFSET_X, 0.0, 0.0);`,
+      vec3 transformed = ${deformed('vSheetPosition - vec3(SHADOW_OFFSET_X, 0.0, 0.0)', 'uv')};`,
     )
     program.fragmentShader = constants + `
       uniform sampler2D uFront;
@@ -196,7 +214,8 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
   // three.js reuses a compiled program whose cache key matches, and the default key is the
   // onBeforeCompile source, the same for every sheet. The generated code is what differs (layout,
   // page aspect, paper), so it is the key: magazines sharing a renderer each get their own.
-  const cacheKey = constants + shader.vertexChunk + (shader.fragmentChunk ?? '') + (paper.cutout ? 'cutout' : '')
+  const cacheKey =
+    constants + shader.vertexChunk + (shader.fragmentChunk ?? '') + (paper.cutout ? 'cutout' : '') + (deform?.glsl ?? '')
   material.customProgramCacheKey = () => cacheKey
   depthMaterial.customProgramCacheKey = () => cacheKey
   distanceMaterial.customProgramCacheKey = () => cacheKey
@@ -235,16 +254,16 @@ export function createSheetMesh(
 }
 
 /**
- * Every sheet rises from the spine at height 0, so along the spine they all but touch and
- * the depth buffer can't separate them: sheets further down flicker through as a light seam.
- * Bias each sheet's depth by its place in the stack instead: the top sheet wins, and a sheet
- * that's turning wins over everything.
+ * Without a sheet gap every sheet rises from the spine at height 0, so along the spine they
+ * all but touch and the depth buffer can't separate them: sheets further down flicker through
+ * as a light seam. Bias each sheet's depth by its place in the stack instead: the top sheet
+ * wins, and a sheet that's turning wins over everything. `bias` false leaves depth alone.
  */
-export function layerSheet(mesh: SheetMesh, depth: number, count: number, moving: boolean) {
+export function layerSheet(mesh: SheetMesh, depth: number, count: number, moving: boolean, bias: boolean) {
   const material = mesh.material
-  material.polygonOffset = true
+  material.polygonOffset = bias
   material.polygonOffsetFactor = 0
-  material.polygonOffsetUnits = moving ? -(count + 4) : -(count - Math.min(depth, count))
+  material.polygonOffsetUnits = bias ? (moving ? -(count + 4) : -(count - Math.min(depth, count))) : 0
   mesh.renderOrder = depth
 }
 
