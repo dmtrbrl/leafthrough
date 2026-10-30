@@ -6,6 +6,29 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.6]
+
+- `paper.sheetGap`: space between stacked sheets, in page widths, so they stay in order by
+  real depth instead of touching at the spine. It follows each sheet's place in the pile
+  through turns, hovers and settling, in both layouts, and the shadow passes use it too.
+- `paper.depthBias`: turns the polygon offset that sorts touching sheets on or off. It no
+  longer has to be overridden before each draw.
+- `LeafThroughObject` now separates its sheets by default (`sheetGap` `0.0005`, `depthBias`
+  off), so hidden pages no longer show through from behind, or with a small camera `near`.
+  The standalone magazine looks as before. Without the bias, wrinkles nest so sheets with
+  little bulge don't cross.
+- `deform` (experimental, `LeafThroughObject` only): reshape the paper in your own GLSL. It
+  applies to the colour, depth and distance passes alike, normals follow, its uniforms are
+  read every frame, and it survives rebuilds. See
+  [Reshaping the paper](https://github.com/dmtrbrl/leafthrough#reshaping-the-paper).
+- `LeafThroughObject`: `lighting.shadows` changes without a rebuild, and the magazine no
+  longer turns sheet shadows back on after they're switched off.
+- README: how the camera's depth range affects closely stacked sheets, and the depth
+  bias's limits in a scene of your own.
+- Tests check that hidden artwork doesn't show through: in both layouts, from the front and
+  behind, with flat, low-bulge and thick booklets, after turns and hovers, at twice the
+  pixel ratio and across camera depth ranges.
+
 ## [0.1.5]
 
 - Docs for `LeafThroughObject`: `sun.position` points towards your shadow-casting light,

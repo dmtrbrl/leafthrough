@@ -340,3 +340,140 @@ test.each([['directional', 'cutout'], ['point', 'cutout'], ['directional', 'trim
     renderer.dispose()
   }
 })
+
+// the private state these tests look at
+type ObjectInternals = {
+  view: { engine: { sheets: { mesh: THREE.Mesh }[] }; settings: { paper: { sheetGap: number; depthBias: boolean } } }
+}
+const viewOf = (m: LeafThroughObject) => (m as unknown as ObjectInternals).view
+
+test('sheets stand apart and sort by depth alone, unless told otherwise', () =>
+  withObject({}, (m) => {
+    expect(viewOf(m).settings.paper).toMatchObject({ sheetGap: 0.0005, depthBias: false })
+    m.tick()
+    expect(viewOf(m).engine.sheets.every(({ mesh }) => !(mesh.material as THREE.Material).polygonOffset)).toBe(true)
+    m.update({ paper: { grain: false, sheetGap: 0, depthBias: true } })
+    m.tick()
+    expect(viewOf(m).settings.paper).toMatchObject({ sheetGap: 0, depthBias: true })
+    expect(viewOf(m).engine.sheets.every(({ mesh }) => (mesh.material as THREE.Material).polygonOffset)).toBe(true)
+  }))
+
+test.each(['single', 'spread'] as const)('%s: lighting.shadows turns on and off without a rebuild, and stays', (layout) =>
+  withObject({ layout, lighting: { shadows: true } }, (m) => {
+    const { engine } = viewOf(m)
+    const shadowed = () => engine.sheets.some(({ mesh }) => mesh.castShadow || mesh.receiveShadow)
+    expect(shadowed()).toBe(true)
+    m.update({ lighting: { shadows: false } })
+    expect(viewOf(m).engine).toBe(engine)
+    m.next()
+    for (let i = 0; i < 5; i++) m.tick()
+    expect(shadowed()).toBe(false)
+    m.update({ lighting: { shadows: true } })
+    m.tick()
+    expect(viewOf(m).engine).toBe(engine)
+    expect(shadowed()).toBe(true)
+    m.update({ lighting: { shadows: true, sun: { position: [1, 1, 1] } } })
+    expect(viewOf(m).engine).not.toBe(engine)
+  }))
+
+// squeezes the sheets towards the spine as `keep` goes from 1 to 0
+const squeeze = (keep: THREE.IUniform<number>) => ({
+  glsl: /* glsl */ `
+    uniform float uKeep;
+    vec3 deformSheet(vec3 p, vec2 uv) {
+      return vec3(p.x * uKeep, p.y, p.z);
+    }`,
+  uniforms: { uKeep: keep },
+})
+
+// The pages and the shadow they cast both follow the deform, and its uniforms are read live:
+// the uniform here is a plain object whose value changes after the shaders are built.
+test.each([
+  ['single', 'directional'],
+  ['spread', 'point'],
+] as const)('%s: deform reshapes the paper and its %s shadow', async (layout, kind) => {
+  const renderer = new THREE.WebGLRenderer({ alpha: true })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.BasicShadowMap
+  const target = new THREE.WebGLRenderTarget(256, 128)
+  const camera = new THREE.OrthographicCamera(-1, 3, 1, -1, 0.1, 20)
+  camera.position.set(0, 0, 6)
+  const scene = new THREE.Scene()
+  const light = kind === 'point' ? new THREE.PointLight(0xffffff, 10) : new THREE.DirectionalLight(0xffffff, 2)
+  light.position.set(-3, 0, 2)
+  light.castShadow = true
+  light.shadow.mapSize.set(512, 512)
+  light.shadow.camera.near = 0.1
+  light.shadow.camera.far = 20
+  if (light instanceof THREE.DirectionalLight) {
+    Object.assign(light.shadow.camera, { left: -5, right: 5, top: 3, bottom: -3 })
+    scene.add(light.target)
+  }
+  scene.add(light)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.ShadowMaterial({ opacity: 1 }))
+  floor.position.z = -1
+  floor.receiveShadow = true
+  scene.add(floor)
+  const keep = { value: 1 }
+  const magazine = new LeafThroughObject({ renderer, camera }, {
+    ...base, layout, pageAspect: 1, pages: pages(layout === 'spread' ? 2 : 1),
+    paper: { grain: false, bulge: 0, wrinkles: 0 }, lighting: { shadows: true }, deform: squeeze(keep),
+  })
+  magazine.position.x = -0.5
+  scene.add(magazine)
+  const pixel = new Uint8Array(4)
+  const alphaAt = (x: number) => {
+    renderer.setRenderTarget(target)
+    renderer.render(scene, camera)
+    renderer.readRenderTargetPixels(target, Math.round(((x + 1) / 4) * 255), 64, 1, 1, pixel)
+    return pixel[3]
+  }
+  try {
+    await whenReady(magazine)
+    magazine.tick()
+    renderer.setClearColor(0, 0)
+    // the page lies from -0.5 to 0.5, its shadow from 0.75 to 2.25
+    expect(alphaAt(0)).toBe(255)
+    expect(alphaAt(1.5)).toBeGreaterThan(200)
+    keep.value = 0.1
+    expect(alphaAt(0)).toBeLessThan(10)
+    expect(alphaAt(1.5)).toBeLessThan(10)
+  } finally {
+    magazine.dispose()
+    floor.geometry.dispose()
+    floor.material.dispose()
+    light.shadow.map?.dispose()
+    target.dispose()
+    renderer.dispose()
+  }
+})
+
+test('deform: new uniform values or objects apply in place, new GLSL rebuilds', () =>
+  withObject({ deform: squeeze({ value: 1 }) }, (m) => {
+    const { engine } = viewOf(m)
+    m.update({ deform: squeeze({ value: 0.5 }) })
+    expect(viewOf(m).engine).toBe(engine)
+    const mesh = viewOf(m).engine.sheets[0].mesh
+    const program = { uniforms: {} as Record<string, THREE.IUniform>, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader }
+    ;(mesh.material as THREE.Material).onBeforeCompile(program as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer)
+    expect(program.uniforms.uKeep.value).toBe(0.5)
+    m.update({ deform: { ...squeeze({ value: 0.5 }), glsl: squeeze({ value: 0 }).glsl.replace('p.y', 'p.y * 1.0') } })
+    expect(viewOf(m).engine).not.toBe(engine)
+  }))
+
+test('without a deform the shaders are as before; with one, every pass applies it', () => {
+  const compile = (material: THREE.Material, shader: 'standard' | 'depth' | 'distance') => {
+    const program = { uniforms: {}, vertexShader: THREE.ShaderLib[shader].vertexShader, fragmentShader: THREE.ShaderLib[shader].fragmentShader }
+    material.onBeforeCompile(program as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer)
+    return program.vertexShader
+  }
+  const shaders = (m: LeafThroughObject) => {
+    const mesh = viewOf(m).engine.sheets[0].mesh
+    return [compile(mesh.material as THREE.Material, 'standard'), compile(mesh.customDepthMaterial!, 'depth'), compile(mesh.customDistanceMaterial!, 'distance')]
+  }
+  return withObject({}, (plain) => {
+    for (const shader of shaders(plain)) expect(shader).not.toContain('deformSheet')
+    plain.update({ deform: squeeze({ value: 1 }) })
+    for (const shader of shaders(plain)) expect(shader).toContain('sheetDeformed(')
+  })
+})

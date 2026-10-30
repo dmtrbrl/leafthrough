@@ -6,6 +6,7 @@ import type { GoToOptions } from './LeafThrough.js'
 import { bindKeyboard, pageDetail, pagesAt, pageToPosition, Riffle } from './navigation.js'
 import {
   changedOptions,
+  deepEqual,
   DEFAULT_SPREAD_QUERY,
   LIVE_OPTIONS,
   pageImage,
@@ -15,6 +16,7 @@ import {
   type LeafThroughOptions,
   type Layout,
   type PageChangeDetail,
+  type PaperDeform,
   type ResolvedSettings,
 } from './options.js'
 import { PaperTextures } from './paper/paperTextures.js'
@@ -27,8 +29,17 @@ import { PageLoader } from './textures.js'
  * `shadows` (whether sheets cast and receive them) and `sun.position` apply: the lights are
  * your scene's. Point `sun.position` towards your shadow-casting directional light, in the
  * magazine's own frame; it places the shadow a turning sheet casts right by the spine.
+ * `lighting.shadows` changes without a rebuild.
+ *
+ * Its sheets stand apart by default (`paper.sheetGap` `0.0005`, about 0.1 mm paper on a
+ * 210 mm page) and `paper.depthBias` is off, so they sort by real depth from any side.
  */
-export type LeafThroughObjectOptions = Omit<LeafThroughOptions, 'bleed' | 'maxPixelRatio' | 'plain' | 'label' | 'formatPageLabel'>
+export type LeafThroughObjectOptions = Omit<LeafThroughOptions, 'bleed' | 'maxPixelRatio' | 'plain' | 'label' | 'formatPageLabel'> & {
+  /** Reshapes the paper in your own GLSL. Experimental. */
+  deform?: PaperDeform
+}
+
+const SHEET_GAP = 0.0005
 
 /** What the magazine draws with, from your scene. */
 export interface LeafThroughObjectContext {
@@ -126,7 +137,7 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
     this.renderer = renderer
     this.camera = camera
     this.domElement = domElement
-    this.options = snapshot(options)
+    this.options = copyOptions(options)
     const object = this
     this.metrics = {
       get dragWidth() {
@@ -188,7 +199,7 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
    */
   get bounds(): LeafThroughBounds {
     const layout = this.layout
-    const aspect = this.view?.settings.pageAspect ?? resolveSettings(this.options, layout, false).pageAspect
+    const aspect = this.view?.settings.pageAspect ?? this.resolve(layout).pageAspect
     return { pages: plainFramingFor(layout, aspect).box, reach: framingFor(layout, aspect).view }
   }
 
@@ -293,13 +304,23 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
   private applyOptions(options: LeafThroughObjectOptions) {
     if (this.disposed) return
     const previous = this.options
-    const next = (this.options = snapshot(options))
+    const next = (this.options = copyOptions(options))
     const changed = changedOptions(previous, next)
     if (!changed.length) return
     if (changed.includes('spreadQuery')) this.watchSpreadQuery()
 
+    // shadows turn on and off in place; the rest of lighting rebuilds
+    const { shadows: wasShadowed, ...lighting } = previous.lighting ?? {}
+    const { shadows: shadowed, ...nextLighting } = next.lighting ?? {}
+    const liveShadows = changed.includes('lighting') && deepEqual(lighting, nextLighting)
+    if (liveShadows && (wasShadowed ?? true) !== (shadowed ?? true)) this.view?.engine.setShadows?.(shadowed ?? true)
+
     const page = this.page
-    let rebuild = changed.some((key) => !LIVE_OPTIONS.has(key))
+    let rebuild = changed.some((key) => {
+      if (key === 'deform') return deformKey(previous) !== deformKey(next)
+      if (key === 'lighting') return !liveShadows
+      return !LIVE_OPTIONS.has(key)
+    })
     if (changed.includes('pages') && this.pagesKey(next) !== this.lastPagesKey) {
       this.loader?.dispose()
       this.loader = null
@@ -329,7 +350,7 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
     this.view?.dispose()
 
     const layout = this.pickLayout()
-    const settings = resolveSettings(this.options, layout, this.motionMedia.matches)
+    const settings = this.resolve(layout)
     this.lastPagesKey = this.pagesKey(this.options)
     if (!this.loader) this.loadPages(page, layout)
     this.loader?.setWrap(layout === 'single' && settings.loop)
@@ -351,6 +372,7 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
       shading: {
         spineContact: { value: new THREE.Vector3(1, 0, 0) },
         lightDirection: { value: new THREE.Vector3(...settings.lighting.sun.position).normalize() },
+        origin: { value: new THREE.Vector3() },
       },
       requestFrame: () => this.requestFrame(),
     }
@@ -366,6 +388,30 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
       },
     }
     this.requestFrame()
+  }
+
+  // the settings, with this object's own defaults and its deform
+  private resolve(layout: Layout): ResolvedSettings {
+    const settings = resolveSettings(this.options, layout, this.motionMedia.matches)
+    const paper = this.options.paper
+    settings.paper.sheetGap = Math.max(0, paper?.sheetGap ?? SHEET_GAP)
+    settings.paper.depthBias = paper?.depthBias ?? false
+    const deform = this.options.deform
+    if (deform) {
+      // The shaders read each uniform through the options as they are now, so a value set on
+      // the caller's own object, or an object swapped in by update(), shows on the next frame.
+      const uniforms: Record<string, THREE.IUniform> = {}
+      for (const name of Object.keys(deform.uniforms ?? {})) {
+        const options = () => this.options
+        uniforms[name] = {
+          get value() {
+            return options().deform?.uniforms?.[name]?.value
+          },
+        }
+      }
+      settings.deform = { glsl: deform.glsl, uniforms }
+    }
+    return settings
   }
 
   // A drag across this many pixels turns a page all the way: the magazine's drag width, at the
@@ -463,4 +509,16 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
     this.options.onPageChange?.(detail)
     this.dispatchEvent({ type: 'pagechange', detail })
   }
+}
+
+// What a deform compiles to: new uniform values, or new objects under the same names, don't rebuild.
+const deformKey = ({ deform }: LeafThroughObjectOptions) =>
+  deform ? `${deform.glsl}\n${Object.keys(deform.uniforms ?? {}).join(',')}` : ''
+
+// Like snapshot(), but deform's uniforms stay the caller's own objects, whose values the shaders read.
+function copyOptions(options: LeafThroughObjectOptions): LeafThroughObjectOptions {
+  const copy = snapshot(options)
+  const uniforms = options.deform?.uniforms
+  if (copy.deform && uniforms) copy.deform = { ...copy.deform, uniforms: { ...uniforms } }
+  return copy
 }

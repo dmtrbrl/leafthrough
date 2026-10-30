@@ -391,6 +391,7 @@ export class LeafThrough extends EventTarget {
     const shading = {
       spineContact: { value: new THREE.Vector3(1, 0, 0) },
       lightDirection: { value: sun.position.clone().sub(sun.target.position).normalize() },
+      origin: { value: new THREE.Vector3() },
     }
 
     let floor: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial> | null = null

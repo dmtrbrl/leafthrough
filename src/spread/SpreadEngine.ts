@@ -85,6 +85,15 @@ function stackLift(index: number, count: number, progress: number) {
   return 0.31 + (0.69 * (index + (count - 1 - 2 * index) * (1 - progress))) / (count - 1)
 }
 
+// How many sheets lie under this one: those after it on the right, those before it on the
+// left. A turning sheet keeps the height of the pile it leans over, so it stays above every
+// sheet there, and changes over while it stands upright, where a height change only slides
+// it along itself.
+function sheetsUnder(index: number, count: number, progress: number) {
+  const t = clamp((progress - 0.25) / 0.5, 0, 1)
+  return count - 1 - index + (2 * index - count + 1) * t * t * (3 - 2 * t)
+}
+
 /**
  * The open magazine: sheets rotate over the spine, bending as they go. Horizontal drag
  * drives the turn; where the hand is around the spine tilts the fold.
@@ -194,6 +203,12 @@ export class SpreadEngine implements Engine {
     this.cancelHold()
     this.hover.active = false
     if (this.press) this.release(new PointerEvent('pointercancel', { pointerId: this.press.id }))
+    this.wake()
+  }
+
+  setShadows(on: boolean) {
+    this.settings.lighting.shadows = on
+    for (const sheet of this.sheets) sheet.mesh.receiveShadow = on
     this.wake()
   }
 
@@ -616,7 +631,7 @@ export class SpreadEngine implements Engine {
       const depth = i >= this.current ? i - this.current : this.current - 1 - i
       const turning = this.inFlight(i) || this.drag?.index === i
       sheet.mesh.castShadow = this.settings.lighting.shadows && (depth < 3 || turning)
-      layerSheet(sheet.mesh, depth, this.sheets.length, turning)
+      layerSheet(sheet.mesh, depth, this.sheets.length, turning, this.settings.paper.depthBias)
       const lift = Math.abs(sheet.uniforms.uFlipRotation.value.y)
       if (turning && lift > upright) {
         upright = lift
@@ -651,6 +666,7 @@ export class SpreadEngine implements Engine {
     u.uWrinkleSide.value = -Math.cos(turn)
     u.uDirection.value = sheet.directionSmooth
     u.uStackLift.value = sheet.liftBase + sheet.liftSpan * sheet.progress
+    u.uStackGap.value = this.settings.paper.sheetGap * sheetsUnder(sheet.index, this.sheets.length, sheet.progress)
     u.uBendAngle.value = bend
     u.uFold.value.set(cos, sin)
     u.uCurl.value.set(curlStart, curlLength)
