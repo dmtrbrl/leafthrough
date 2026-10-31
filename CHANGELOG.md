@@ -6,6 +6,13 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.7]
+
+- Single layout: turning the last page with `loop` on uncovers the cover. Read pages that had
+  settled flat under the pile lay newest on top, so the last page revealed one of them, and as
+  the magazine shut they all crossed on the way to their closed order, the cover rising through
+  the rest. They now settle in that order, the cover first, and shutting lifts them as one.
+
 ## [0.1.6]
 
 - `paper.sheetGap`: space between stacked sheets, in page widths, so they stay in order by

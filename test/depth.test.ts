@@ -220,6 +220,24 @@ describe('nothing shows through', () => {
     expect(red).toBe(0)
   })
 
+  test('single, the last page turning with the loop', async () => {
+    // Mid-turn, the back cover uncovers the cover, not one of the pages read before it, which lie
+    // settled flat under the pile. Flat paper: with a bulge the cover's shows through anyway.
+    const red = await redPixels({
+      pageCount: 12,
+      hidden: (i) => i !== 0 && i !== 11,
+      options: { layout: 'single', startPage: 11, loop: true, paper: PAPERS['flat paper'] },
+      camera: FRONT,
+      faces: SINGLE,
+      act: async (m) => {
+        m.next()
+        const start = performance.now()
+        for (let now = start; now <= start + 260; now += 20) m.tick(now)
+      },
+    })
+    expect(red).toBe(0)
+  })
+
   test('at twice the pixel ratio', async () => {
     const camera = { ...FRONT, pixelRatio: 2 }
     const options = { layout: 'spread' as const, startPage: 7 }
