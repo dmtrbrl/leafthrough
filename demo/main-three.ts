@@ -52,6 +52,8 @@ const AWAY = 3.6
 const SLIDE_FROM = 0.2
 const CLEARANCE = ENVELOPE.flapLength + 0.02
 const PRESSED = 0.08
+// Reduce Motion keeps the reveal, as the magazine keeps its turns: it's the demo, and skipping
+// it looked like nothing happening. Only the flourish goes, the automatic turn to pages 4–5.
 const motionMedia = matchMedia('(prefers-reduced-motion: reduce)')
 const DURATION = 2.4
 let progress = 0
@@ -83,7 +85,7 @@ function place() {
   if (autoTurnPending && clearance >= CLEARANCE) {
     autoTurnPending = false
     // The API is zero-based: show printed pages 4–5 while the envelope withdraws.
-    if (spread) magazine.goTo(3, { animate: !motionMedia.matches })
+    if (spread) magazine.goTo(3, { animate: true })
   }
 }
 
@@ -112,14 +114,14 @@ function advance(dt: number) {
   // final sheet to settle, then run the whole return without a mid-motion stop.
   if (state === 'closing' && magazine.page === 0 && !magazine.turning) state = 'returning'
   if (state === 'opening') {
-    progress = motionMedia.matches ? 1 : Math.min(1, progress + dt / DURATION)
+    progress = Math.min(1, progress + dt / DURATION)
     if (progress === 1) {
       state = 'out'
       magazine.enabled = true
       sync()
     }
   } else if (state === 'returning') {
-    progress = motionMedia.matches ? 0 : Math.max(0, progress - dt / DURATION)
+    progress = Math.max(0, progress - dt / DURATION)
     if (progress === 0) {
       state = 'sealed'
       sync()
@@ -129,7 +131,7 @@ function advance(dt: number) {
 
 function open() {
   if (state !== 'sealed' || !ready) return
-  autoTurnPending = magazine.layout === 'spread'
+  autoTurnPending = magazine.layout === 'spread' && !motionMedia.matches
   state = 'opening'
   renderer.domElement.focus({ preventScroll: true })
   sync()
@@ -138,7 +140,7 @@ function putBack() {
   if (state !== 'out') return
   state = 'closing'
   magazine.enabled = false
-  magazine.goTo(0, { animate: !motionMedia.matches })
+  magazine.goTo(0, { animate: true })
   sync()
 }
 function sync() {
