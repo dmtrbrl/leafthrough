@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { floorPoint, type Engine, type EngineContext, type EngineInput, type EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
-import { createSpreadGeometry, createSpreadSheet, type SpreadSheetUniforms } from './spreadSheet.js'
+import { createSpreadSheet, sharedSpreadGeometry, type SpreadSheetUniforms } from './spreadSheet.js'
 
 const CURVE = {
   arc: 0.88, // share of a half turn the sheet bends by mid-flip
@@ -108,6 +108,7 @@ export class SpreadEngine implements Engine {
   private readonly metrics: EngineMetrics
   private readonly requestFrame: () => void
   private readonly geometry: THREE.BufferGeometry
+  private readonly releaseGeometry: () => void
   private readonly sheets: Sheet[]
   private readonly abort = new AbortController()
   private readonly shading: EngineContext['shading']
@@ -138,7 +139,9 @@ export class SpreadEngine implements Engine {
     const count = Math.ceil(ctx.textures.length / 2)
     this.maxPosition = count
     this.current = clamp(Math.round(ctx.position), 0, count)
-    this.geometry = createSpreadGeometry(ctx.settings.pageAspect)
+    const { geometry, release } = sharedSpreadGeometry(ctx.shared, ctx.settings.pageAspect)
+    this.geometry = geometry
+    this.releaseGeometry = release
     this.sheets = []
     for (let i = 0; i < count; i++) {
       const front = ctx.textures[2 * i]
@@ -216,7 +219,7 @@ export class SpreadEngine implements Engine {
     this.cancelHold()
     this.abort.abort()
     for (const sheet of this.sheets) disposeSheetMesh(sheet.mesh)
-    this.geometry.dispose()
+    this.releaseGeometry()
   }
 
   // --- helpers ----------------------------------------------------------------

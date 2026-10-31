@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { ResolvedSettings } from '../options.js'
+import type { SharedResources } from '../shared.js'
 import { createSheetMesh, type SheetMesh, type SheetShading, type SheetUniforms } from '../paper/paperMaterial.js'
 
 // Single-layout sheet: one page per sheet, printed on the front only. Pages that have been
@@ -124,6 +125,12 @@ const fragmentChunk = /* glsl */ `
 
 export function createSingleGeometry(aspect: number): THREE.BufferGeometry {
   return new THREE.PlaneGeometry(1, aspect, 64, Math.round(64 * aspect))
+}
+
+/** The sheet geometry for `aspect`, shared by the magazines a renderer draws; `release` it when done. */
+export function sharedSingleGeometry(shared: SharedResources, aspect: number) {
+  const key = `single-geometry:${aspect}`
+  return { geometry: shared.acquire(key, () => createSingleGeometry(aspect)), release: () => shared.release(key) }
 }
 
 export interface SingleSheetUniforms extends SheetUniforms {

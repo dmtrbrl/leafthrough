@@ -190,6 +190,10 @@ renderer.setAnimationLoop((now) => {
   `receiveShadow` on the sheets, which the magazine sets itself.
 - **Depth.** See [Depth](#depth): the sheets stand a little apart, which needs enough depth
   precision from your camera.
+- **Several magazines.** Magazines drawn by the same renderer share the built-in grain's
+  texture and the sheet geometry of each layout and page aspect: made for the first, freed
+  with the last. The grain itself is drawn once per page, and the wrinkles are sampled once
+  per aspect.
 - **Rendering on demand.** If you only draw when something changes, listen for `change`:
   it fires when input, loading or a method call needs a frame. Then keep drawing while
   `tick()` returns true.
@@ -311,14 +315,14 @@ The magazine fills the element you give it and keeps its proportions, centred.
 | `formatPageLabel` | `(detail) => string`             | `"Pages 14–15 of 28"`                             | What screen readers hear when pages change.                                                                |
 | `onPageChange`    | `(detail) => void`               |                                                   | Same as the `pagechange` event.                                                                            |
 | `onReady`         | `() => void`                     |                                                   | The first pages are loaded and on screen.                                                                  |
-| `onPageLoad`      | `(page) => void`                 |                                                   | A page's image loaded. Same as the `pageload` event.                                                       |
+| `onPageLoad`      | `(page) => void`                 |                                                   | A page's image is loaded and on the GPU. Same as the `pageload` event.                                     |
 | `onError`         | `(error, page?) => void`         |                                                   | A page failed to load. It stays blank paper until `retry()`.                                               |
 
 **`paper`**
 
 |                           | Default                     |                                                                                                              |
 | ------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `grain`                   | `true`                      | `false` turns it off. You can also pass a tiling greyscale image or its URL; only its brightest specks show. |
+| `grain`                   | `true`                      | `false` turns it off. You can also pass a tiling greyscale image or its URL; only its brightest specks show. The built-in one is drawn once per page, however many magazines there are. |
 | `grainScale`              | `1.46`                      | Tiles across a page.                                                                                         |
 | `grainStrength`           | `0.17`                      | How much the grain darkens.                                                                                  |
 | `showThrough`             | spread `0.04`, single `0.3` | How much of the other side shows through the paper.                                                          |
@@ -411,11 +415,17 @@ pages: [
   front page's outline (draw the back page as its mirror image).
 - **Cross-origin URLs.** URLs on another origin need CORS headers, because the images are
   uploaded to WebGL.
-- **Textures.** A three.js `Texture` you pass in is never disposed, but the magazine sets its
-  `colorSpace`, `premultiplyAlpha` and `anisotropy`. Give it a texture of its own if you
-  use the same one elsewhere.
+- **Textures.** A three.js `Texture` you pass in is taken as it is: never disposed, and its
+  `colorSpace`, `premultiplyAlpha` and `anisotropy` are left alone, so one that's on the
+  GPU already, or that your own material uses too, isn't uploaded again. Pages the magazine
+  loads itself are sRGB and premultiplied; for yours to look the same, set `colorSpace` to
+  `THREE.SRGBColorSpace`, and `premultiplyAlpha` to `true` if it has transparent parts (the
+  shader lays it over the paper as premultiplied colour).
 - **Load order.** Pages load nearest the reader first, four at a time, and the order follows
-  the reader as they turn or jump. Pages that haven't arrived show blank paper.
+  the reader as they turn or jump. Pages that haven't arrived show blank paper. Once decoded,
+  the pages in view and next to them go to the GPU at once; the rest go one per frame, or
+  more in idle time, so a dozen arriving together don't drop a frame. `pageload` fires for
+  each as it's on the GPU.
 - **Memory.** Pages within `preload` of the visible ones load; pages more than twice that
   far away unload, freeing their GPU memory, and load again when the reader comes back.
   Visible means anything on screen: pages still turning in a quick riffle, and in `single`

@@ -3,6 +3,15 @@ import type { PageImage } from './options.js'
 
 // requests in flight at once, so the pages nearest the reader aren't starved
 const CONCURRENCY = 4
+// Pages this close to the ones in view go to the GPU as soon as they're decoded. The rest go
+// one per frame, or more while the browser reports idle time to spare (an upload of a large
+// page takes a few milliseconds), so a dozen decoded together, as a preload of canvases or
+// cached images is, don't land in one frame.
+const NEAR = 1
+const UPLOADS_PER_FRAME = 1
+const IDLE_SPARE = 8
+// how long an upload waits for idle time before it goes ahead regardless
+const UPLOAD_TIMEOUT = 100
 
 export interface PageLoaderEvents {
   onLoad(page: number, texture: THREE.Texture): void
@@ -22,6 +31,9 @@ export class PageLoader {
   private readonly owned = new Set<THREE.Texture>()
   private readonly inFlight = new Map<number, AbortController>()
   private readonly failed = new Set<number>()
+  // decoded pages waiting for their turn on the GPU
+  private readonly pending = new Map<number, THREE.Texture>()
+  private cancelUploads: (() => void) | null = null
   // `first` pages load before the rest; the rest go nearest first
   private first: number[] = []
   // the pages in view, and the one being read, which loads first among them
@@ -81,6 +93,16 @@ export class PageLoader {
       this.owned.delete(texture)
       texture.dispose()
     })
+    for (const [i, texture] of this.pending) {
+      if (this.distance(i) > keep) {
+        this.pending.delete(i)
+        if (this.owned.delete(texture)) texture.dispose()
+      } else if (this.distance(i) <= NEAR) {
+        // the reader has come to it: no waiting for a frame
+        this.pending.delete(i)
+        this.show(i, texture)
+      }
+    }
     this.pump()
   }
 
@@ -103,6 +125,9 @@ export class PageLoader {
 
   dispose() {
     this.disposed = true
+    this.cancelUploads?.()
+    this.cancelUploads = null
+    this.pending.clear()
     for (const request of this.inFlight.values()) request.abort()
     for (const texture of this.owned) texture.dispose()
     this.owned.clear()
@@ -120,7 +145,7 @@ export class PageLoader {
   private pump() {
     if (this.disposed || this.inFlight.size >= CONCURRENCY) return
     const wanted = (i: number) =>
-      !this.textures[i] && !this.inFlight.has(i) && !this.failed.has(i) && this.distance(i) <= this.radius
+      !this.textures[i] && !this.inFlight.has(i) && !this.pending.has(i) && !this.failed.has(i) && this.distance(i) <= this.radius
     const queue = [
       ...this.first.filter((i) => this.waiting.has(i)),
       ...this.sources
@@ -142,15 +167,19 @@ export class PageLoader {
           if (this.owned.delete(texture)) texture.dispose()
           return
         }
-        texture.colorSpace = THREE.SRGBColorSpace
-        // premultiplied, so filtering at the edge of transparent artwork doesn't pull in the
-        // colour of texels nobody sees (the shader lays the page over the paper colour)
-        texture.premultiplyAlpha = true
-        texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
-        texture.needsUpdate = true
-        this.renderer.initTexture(texture)
-        this.textures[page] = texture
-        this.events.onLoad(page, texture)
+        if (this.owned.has(texture)) {
+          texture.colorSpace = THREE.SRGBColorSpace
+          // premultiplied, so filtering at the edge of transparent artwork doesn't pull in the
+          // colour of texels nobody sees (the shader lays the page over the paper colour)
+          texture.premultiplyAlpha = true
+          texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
+          texture.needsUpdate = true
+        }
+        if (this.waiting.has(page) || this.distance(page) <= NEAR) this.show(page, texture)
+        else {
+          this.pending.set(page, texture)
+          this.scheduleUploads()
+        }
       })
       .catch((error) => {
         if (this.disposed || request.signal.aborted) return
@@ -163,6 +192,44 @@ export class PageLoader {
         if (this.waiting.delete(page) && !this.waiting.size) this.settleFirst()
         this.pump()
       })
+  }
+
+  // Puts the page's texture on the GPU and hands it over. A texture passed in is taken as it
+  // is, so one that's on the GPU already, or shared with the caller's own material, isn't
+  // uploaded again: initTexture only uploads what the renderer hasn't got.
+  private show(page: number, texture: THREE.Texture) {
+    this.renderer.initTexture(texture)
+    this.textures[page] = texture
+    this.events.onLoad(page, texture)
+  }
+
+  // the next pending pages, in idle time where the browser offers it, else before the next frame
+  private scheduleUploads() {
+    if (this.cancelUploads || !this.pending.size) return
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback((deadline) => this.uploadSome(deadline), { timeout: UPLOAD_TIMEOUT })
+      this.cancelUploads = () => cancelIdleCallback(id)
+    } else {
+      const id = requestAnimationFrame(() => this.uploadSome())
+      this.cancelUploads = () => cancelAnimationFrame(id)
+    }
+  }
+
+  // nearest the reader first
+  private uploadSome(deadline?: IdleDeadline) {
+    this.cancelUploads = null
+    const queue = [...this.pending.keys()].sort(
+      (a, b) => this.distance(a) - this.distance(b) || Math.abs(a - this.around) - Math.abs(b - this.around),
+    )
+    let count = 0
+    for (const page of queue) {
+      if (count >= UPLOADS_PER_FRAME && !(deadline && deadline.timeRemaining() > IDLE_SPARE)) break
+      const texture = this.pending.get(page)!
+      this.pending.delete(page)
+      this.show(page, texture)
+      count++
+    }
+    this.scheduleUploads()
   }
 
   private async createTexture(source: PageImage, signal: AbortSignal): Promise<THREE.Texture> {

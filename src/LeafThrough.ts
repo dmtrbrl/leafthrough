@@ -18,6 +18,7 @@ import {
   type ResolvedSettings,
 } from './options.js'
 import { colorKey, PaperTextures } from './paper/paperTextures.js'
+import { sharedResources } from './shared.js'
 import { PlainEngine } from './plain/PlainEngine.js'
 import { SingleEngine } from './single/SingleEngine.js'
 import { SpreadEngine } from './spread/SpreadEngine.js'
@@ -415,6 +416,7 @@ export class LeafThrough extends EventTarget {
       textures,
       blank: layout === 'single' ? this.paper.back(settings.paper.backColor) : blank,
       pattern: this.paper.grain(settings, renderer),
+      shared: sharedResources(renderer),
       position: this.pageToPosition(page, layout),
       metrics: this.metrics,
       shading,

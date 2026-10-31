@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { ResolvedSettings } from '../options.js'
+import type { SharedResources } from '../shared.js'
 import { createSheetMesh, type SheetMesh, type SheetShading, type SheetUniforms } from '../paper/paperMaterial.js'
 
 // A spread sheet is a 1 × pageAspect plane. Its flat coordinates come from the uv: x runs
@@ -106,19 +107,33 @@ function wrinkleNoise(u: number, v: number, aspect: number) {
   return value
 }
 
+// The wrinkles depend only on the aspect, and sampling them is most of what a geometry costs,
+// so each aspect's samples are kept for the next magazine that needs them.
+const noiseByAspect = new Map<number, Float32Array>()
+
 export function createSpreadGeometry(aspect: number): THREE.BufferGeometry {
   const geometry = new THREE.PlaneGeometry(1, aspect, 64, Math.round(64 * aspect))
-  const uv = geometry.attributes.uv
-  const noise = new Float32Array(uv.count * 3)
-  for (let i = 0; i < uv.count; i++) {
-    const u = uv.getX(i)
-    const v = uv.getY(i)
-    noise[i * 3] = wrinkleNoise(u, v, aspect)
-    noise[i * 3 + 1] = wrinkleNoise(u + NORMAL_EPSILON, v, aspect)
-    noise[i * 3 + 2] = wrinkleNoise(u, v + NORMAL_EPSILON / aspect, aspect)
+  let noise = noiseByAspect.get(aspect)
+  if (!noise) {
+    const uv = geometry.attributes.uv
+    noise = new Float32Array(uv.count * 3)
+    for (let i = 0; i < uv.count; i++) {
+      const u = uv.getX(i)
+      const v = uv.getY(i)
+      noise[i * 3] = wrinkleNoise(u, v, aspect)
+      noise[i * 3 + 1] = wrinkleNoise(u + NORMAL_EPSILON, v, aspect)
+      noise[i * 3 + 2] = wrinkleNoise(u, v + NORMAL_EPSILON / aspect, aspect)
+    }
+    noiseByAspect.set(aspect, noise)
   }
   geometry.setAttribute('aNoise', new THREE.BufferAttribute(noise, 3))
   return geometry
+}
+
+/** The sheet geometry for `aspect`, shared by the magazines a renderer draws; `release` it when done. */
+export function sharedSpreadGeometry(shared: SharedResources, aspect: number) {
+  const key = `spread-geometry:${aspect}`
+  return { geometry: shared.acquire(key, () => createSpreadGeometry(aspect)), release: () => shared.release(key) }
 }
 
 export interface SpreadSheetUniforms extends SheetUniforms {

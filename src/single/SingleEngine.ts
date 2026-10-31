@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { floorPoint, type Engine, type EngineContext, type EngineInput, type EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
-import { createSingleGeometry, createSingleSheet, type SingleSheetUniforms } from './singleSheet.js'
+import { createSingleSheet, sharedSingleGeometry, type SingleSheetUniforms } from './singleSheet.js'
 
 // One page in view. Turned pages swing around the spine and roll up around a cone behind
 // the magazine; the unread pile bulges up off the spine. After the last page everything
@@ -120,6 +120,7 @@ export class SingleEngine implements Engine {
   private readonly metrics: EngineMetrics
   private readonly requestFrame: () => void
   private readonly geometry: THREE.BufferGeometry
+  private readonly releaseGeometry: () => void
   private readonly sheets: Sheet[]
   private readonly count: number
   private readonly radiusSpacing: number[]
@@ -155,7 +156,9 @@ export class SingleEngine implements Engine {
     this.maxPosition = this.count
     this.current = clamp(Math.round(ctx.position), 0, Math.max(this.count - 1, 0)) // pages turned
 
-    this.geometry = createSingleGeometry(ctx.settings.pageAspect)
+    const { geometry, release } = sharedSingleGeometry(ctx.shared, ctx.settings.pageAspect)
+    this.geometry = geometry
+    this.releaseGeometry = release
     this.sheets = ctx.textures.map((front, index) => {
       const { mesh, uniforms } = createSingleSheet(this.geometry, front, ctx.blank, ctx.pattern, ctx.settings, ctx.shading)
       this.group.add(mesh)
@@ -257,7 +260,7 @@ export class SingleEngine implements Engine {
     this.cancelHold()
     this.abort.abort()
     for (const sheet of this.sheets) disposeSheetMesh(sheet.mesh)
-    this.geometry.dispose()
+    this.releaseGeometry()
   }
 
   // --- helpers ----------------------------------------------------------------
@@ -315,6 +318,11 @@ export class SingleEngine implements Engine {
 
   private shutting(turned: number) {
     return smooth((this.closing(turned) - 0.6) / 0.4)
+  }
+
+  // how far a read page has settled flat under the pile: 0 still on the roll, 1 flat
+  private fallOf(sheet: Sheet, paced: number, shut: number) {
+    return Math.max(smooth((paced - (sheet.index + 1) - this.fallDelay) / this.fallDuration), shut)
   }
 
   private inFlight(sheet: Sheet) {
@@ -655,13 +663,18 @@ export class SingleEngine implements Engine {
     }
 
     const closing = this.closing(turned) > 0
+    const paced = this.paced(turned)
+    const shut = this.shutting(turned)
     // Pages turning back can run well ahead of the position, so the pile is drawn down from its
     // top, the page they're settling onto, rather than from the position.
     const pileFrom = Math.max(this.current, top?.index ?? this.current)
     for (const sheet of this.sheets) {
       const i = sheet.index
       sheet.mesh.visible = closing || i <= pileFrom + PILE.renderDepth || this.busy(sheet)
-      const depth = i < this.current ? this.current - 1 - i : i - this.current
+      // Read pages on the roll lie newest nearest, as their rolls do; settled flat under the
+      // pile they carry it on down, the cover first.
+      const depth =
+        i >= this.current ? i - this.current : this.fallOf(sheet, paced, shut) >= 1 ? this.count - this.current + i : this.current - 1 - i
       layerSheet(sheet.mesh, depth, this.count, this.busy(sheet), this.settings.paper.depthBias)
     }
 
@@ -706,10 +719,7 @@ export class SingleEngine implements Engine {
       180
     const shut = this.shutting(turned)
     const closed = this.closing(turned) >= 1 ? 1 : 0
-    const fall = Math.max(
-      smooth((paced - (sheet.index + 1) - this.fallDelay) / this.fallDuration),
-      shut,
-    )
+    const fall = this.fallOf(sheet, paced, shut)
 
     // cone radii: the further back in the roll, the wider; it evens out as the roll fills
     const spacing = this.radiusSpacing[sheet.index] ?? 0
@@ -764,12 +774,13 @@ export class SingleEngine implements Engine {
     // sheets under it while it's on the pile, by the read pages that went round before it once
     // it's rolled up (the older, the further out, like their rolls). A page going round moves
     // from one to the other as it turns, and the pages before it make room. Settled flat under
-    // the pile they keep the height they came round at, and all go back to their place in the
-    // closed magazine as it shuts.
+    // the pile they take their order in the closed magazine, the cover first under the last
+    // page: the last page turning uncovers the cover, and shutting lifts them all as one back
+    // to their places.
     const under = P - 1 - sheet.index
     const before = Math.max(0, turned - 1 - sheet.index)
     const around = smooth(T)
-    const offset = fallen ? before * Math.cos(spineOpen) : under + (before - under) * around
+    const offset = fallen ? -(sheet.index + 1) : under + (before - under) * around
     u.uStackGap.value = this.settings.paper.sheetGap * (offset + (under - offset) * shut)
   }
 

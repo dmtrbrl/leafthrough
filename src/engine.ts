@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { ResolvedSettings } from './options.js'
 import type { SheetShading } from './paper/paperMaterial.js'
+import type { SharedResources } from './shared.js'
 
 export interface EngineContext {
   input: EngineInput
@@ -10,6 +11,8 @@ export interface EngineContext {
   /** Plain paper, for missing or unprinted sides. */
   blank: THREE.Texture
   pattern: THREE.Texture
+  /** What the magazines on this renderer share, such as the sheet geometry. */
+  shared: SharedResources
   /** Where the magazine opens, in the engine's own position units. */
   position: number
   /** Kept current by the controller as the magazine resizes. */

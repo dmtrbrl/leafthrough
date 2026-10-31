@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { ResolvedSettings } from '../options.js'
 import { loadGrain } from '../textures.js'
 import { solidTexture } from './paperMaterial.js'
+import { sharedResources } from '../shared.js'
 import { createPaperPattern } from './paperPattern.js'
 
 export interface PaperTextureEvents {
@@ -10,12 +11,21 @@ export interface PaperTextureEvents {
   onError(error: unknown): void
 }
 
+const BUILTIN_PATTERN = 'paper-pattern'
+
+interface Pattern {
+  texture: THREE.Texture
+  key: unknown
+  /** Lets go of the texture: disposes it, or hands a shared one back. */
+  release: () => void
+}
+
 /** Plain paper and the grain, kept across rebuilds and made again only when their options change. */
 export class PaperTextures {
   /** Plain paper, for missing pages and the spread's unprinted sides. */
   readonly blank = solidTexture('#fcfcf9')
   backBlank: { texture: THREE.DataTexture; color: string }
-  private pattern: { texture: THREE.Texture; key: unknown } | null = null
+  private pattern: Pattern | null = null
   private disposed = false
 
   constructor(backColor: THREE.ColorRepresentation, private readonly events: PaperTextureEvents) {
@@ -36,32 +46,37 @@ export class PaperTextures {
     const grain = settings.paper.grain
     const key = grain === true || grain === undefined ? 'builtin' : grain === false ? 'none' : grain
     if (this.pattern?.key === key) return this.pattern.texture
-    this.pattern?.texture.dispose()
-    let texture: THREE.Texture
-    if (key === 'builtin') texture = createPaperPattern(renderer)
-    else if (key === 'none') texture = solidTexture('#000000')
-    else {
-      // until the custom grain arrives, use none
-      texture = solidTexture('#000000')
+    this.pattern?.release()
+    if (key === 'builtin') {
+      // one texture for every magazine the renderer draws, freed with the last of them
+      const shared = sharedResources(renderer)
+      const texture = shared.acquire(BUILTIN_PATTERN, () => createPaperPattern(renderer))
+      this.pattern = { texture, key, release: () => shared.release(BUILTIN_PATTERN) }
+      return texture
+    }
+    // none, or none until the custom grain arrives
+    const pattern: Pattern = { texture: solidTexture('#000000'), key, release: () => pattern.texture.dispose() }
+    this.pattern = pattern
+    if (key !== 'none') {
       loadGrain(key as string | HTMLImageElement | HTMLCanvasElement).then(
         (loaded) => {
-          if (this.pattern?.key !== key || this.disposed) return loaded.dispose()
-          this.pattern.texture.dispose()
-          this.pattern.texture = loaded
+          if (this.pattern !== pattern || this.disposed) return loaded.dispose()
+          pattern.texture.dispose()
+          pattern.texture = loaded
           this.events.onGrain()
         },
         (error) => {
-          if (this.pattern?.key === key && !this.disposed) this.events.onError(error)
+          if (this.pattern === pattern && !this.disposed) this.events.onError(error)
         },
       )
     }
-    this.pattern = { texture, key }
-    return texture
+    return pattern.texture
   }
 
   dispose() {
     this.disposed = true
-    this.pattern?.texture.dispose()
+    this.pattern?.release()
+    this.pattern = null
     this.blank.dispose()
     this.backBlank.texture.dispose()
   }

@@ -22,10 +22,13 @@ host.append(renderer.domElement)
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50)
 const sunPosition: [number, number, number] = [-3.5, 2.8, 6]
+// The demo is the motion, so it plays whatever the system's Reduce Motion setting says, the
+// magazine's hover and wobble included: with the reveal skipped, it looked like nothing happened.
 const magazine = new LeafThroughObject({ renderer, camera }, {
   pages: demoPages,
   interaction: { keyboard: true },
   lighting: { sun: { position: sunPosition } },
+  motion: { reducedMotion: false },
 })
 magazine.enabled = false
 scene.add(magazine)
@@ -52,7 +55,6 @@ const AWAY = 3.6
 const SLIDE_FROM = 0.2
 const CLEARANCE = ENVELOPE.flapLength + 0.02
 const PRESSED = 0.08
-const motionMedia = matchMedia('(prefers-reduced-motion: reduce)')
 const DURATION = 2.4
 let progress = 0
 let ready = false
@@ -83,7 +85,7 @@ function place() {
   if (autoTurnPending && clearance >= CLEARANCE) {
     autoTurnPending = false
     // The API is zero-based: show printed pages 4–5 while the envelope withdraws.
-    if (spread) magazine.goTo(3, { animate: !motionMedia.matches })
+    if (spread) magazine.goTo(3, { animate: true })
   }
 }
 
@@ -112,14 +114,14 @@ function advance(dt: number) {
   // final sheet to settle, then run the whole return without a mid-motion stop.
   if (state === 'closing' && magazine.page === 0 && !magazine.turning) state = 'returning'
   if (state === 'opening') {
-    progress = motionMedia.matches ? 1 : Math.min(1, progress + dt / DURATION)
+    progress = Math.min(1, progress + dt / DURATION)
     if (progress === 1) {
       state = 'out'
       magazine.enabled = true
       sync()
     }
   } else if (state === 'returning') {
-    progress = motionMedia.matches ? 0 : Math.max(0, progress - dt / DURATION)
+    progress = Math.max(0, progress - dt / DURATION)
     if (progress === 0) {
       state = 'sealed'
       sync()
@@ -138,7 +140,7 @@ function putBack() {
   if (state !== 'out') return
   state = 'closing'
   magazine.enabled = false
-  magazine.goTo(0, { animate: !motionMedia.matches })
+  magazine.goTo(0, { animate: true })
   sync()
 }
 function sync() {

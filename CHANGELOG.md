@@ -6,6 +6,37 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.7]
+
+- Single layout: turning the last page with `loop` on uncovers the cover. Read pages that had
+  settled flat under the pile lay newest on top, so the last page revealed one of them, and as
+  the magazine shut they all crossed on the way to their closed order, the cover rising through
+  the rest. They now settle in that order, the cover first, and shutting lifts them as one.
+- three.js demo: plays its motion whatever the system's Reduce Motion setting, the
+  magazine's hover and wobble included. The envelope reveal was skipped under the setting,
+  so on a phone with it on the magazine was simply there while its turns still played,
+  which looked broken.
+- The built-in paper grain is drawn once per page and kept, instead of once per magazine
+  (about 80 ms each on a laptop, most of a ten-booklet gallery's start), and magazines drawn
+  by one renderer share its texture, freed with the last of them. It looks the same.
+- The sheet geometry (64 × 88 segments, the wrinkle noise sampled three times a vertex,
+  about 8 ms a magazine on a laptop and four times that on a phone) is shared by the
+  magazines a renderer draws, per layout and page aspect, and freed with the last of them;
+  the noise is kept per aspect for magazines on other renderers. The paper looks the same.
+- A three.js `Texture` passed as a page is taken as it is: its `colorSpace`,
+  `premultiplyAlpha` and `anisotropy` are left alone and it's no longer marked for upload, so
+  one that's on the GPU already, or shared with your own material, isn't uploaded a second
+  time. This changes documented behaviour: a texture of yours now needs `colorSpace` set to
+  sRGB, and `premultiplyAlpha` if it has transparent parts, to look as before (see the
+  README's note on textures).
+- Pages decoded together no longer go to the GPU in one go. The pages in view and next to
+  them upload as they arrive; the rest go one per frame, or more in idle time where the
+  browser offers it (`requestIdleCallback`), nearest the reader first, and a page the reader
+  turns to meanwhile goes at once. `update({ pages })` with a dozen preloaded pages (55 ms,
+  three dropped frames) no longer hitches a magazine mid-turn. `pageload` and `onPageLoad`
+  still fire per page once it's on the GPU.
+
+
 ## [0.1.6]
 
 - `paper.sheetGap`: space between stacked sheets, in page widths, so they stay in order by
