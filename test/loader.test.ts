@@ -171,7 +171,7 @@ test('waiting pages left far behind are dropped, and dispose() cancels the rest'
   FakeIdle.run(50)
   expect(loaded(loader)).toEqual([17, 18, 19, 20, 21, 22, 23])
   // 2 and 3 were decoded but never shown; nothing is reported for them
-  expect(events.onUnload.mock.calls.map(([page]) => page)).toEqual([0, 1])
+  expect(vi.mocked(events.onUnload).mock.calls.map(([page]) => page)).toEqual([0, 1])
   expect(events.onLoad).not.toHaveBeenCalledWith(2, expect.anything())
   expect(events.onLoad).not.toHaveBeenCalledWith(3, expect.anything())
 
