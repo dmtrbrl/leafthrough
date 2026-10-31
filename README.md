@@ -190,6 +190,8 @@ renderer.setAnimationLoop((now) => {
   `receiveShadow` on the sheets, which the magazine sets itself.
 - **Depth.** See [Depth](#depth): the sheets stand a little apart, which needs enough depth
   precision from your camera.
+- **Several magazines.** Magazines drawn by the same renderer share the built-in grain's
+  texture: made for the first, freed with the last. The grain itself is drawn once per page.
 - **Rendering on demand.** If you only draw when something changes, listen for `change`:
   it fires when input, loading or a method call needs a frame. Then keep drawing while
   `tick()` returns true.
@@ -318,7 +320,7 @@ The magazine fills the element you give it and keeps its proportions, centred.
 
 |                           | Default                     |                                                                                                              |
 | ------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `grain`                   | `true`                      | `false` turns it off. You can also pass a tiling greyscale image or its URL; only its brightest specks show. |
+| `grain`                   | `true`                      | `false` turns it off. You can also pass a tiling greyscale image or its URL; only its brightest specks show. The built-in one is drawn once per page, however many magazines there are. |
 | `grainScale`              | `1.46`                      | Tiles across a page.                                                                                         |
 | `grainStrength`           | `0.17`                      | How much the grain darkens.                                                                                  |
 | `showThrough`             | spread `0.04`, single `0.3` | How much of the other side shows through the paper.                                                          |

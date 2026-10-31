@@ -58,7 +58,13 @@ function spread(values: Float32Array) {
   return Math.sqrt(variance / values.length) || 1
 }
 
-export function createPaperPattern(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
+// The pattern is the same every time (a fixed seed), and drawing it takes tens of
+// milliseconds, so it's drawn once per page and kept for every magazine made after.
+let canvas: HTMLCanvasElement | null = null
+
+/** The grain as a canvas: drawn the first time, the same one from then on. */
+export function paperPatternCanvas(): HTMLCanvasElement {
+  if (canvas) return canvas
   let s = 7
   const random = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
 
@@ -92,7 +98,7 @@ export function createPaperPattern(renderer: THREE.WebGLRenderer): THREE.CanvasT
 
   // keep the pattern, take the brightness from LEVELS
   const order = Array.from(grain.keys()).sort((a, b) => grain[a] - grain[b])
-  const canvas = document.createElement('canvas')
+  canvas = document.createElement('canvas')
   canvas.width = canvas.height = SIZE
   const ctx = canvas.getContext('2d')!
   const image = ctx.createImageData(SIZE, SIZE)
@@ -108,8 +114,15 @@ export function createPaperPattern(renderer: THREE.WebGLRenderer): THREE.CanvasT
     image.data[o + 3] = 255
   })
   ctx.putImageData(image, 0, 0)
+  return canvas
+}
 
-  const texture = new THREE.CanvasTexture(canvas)
+/**
+ * A texture of the grain for `renderer`. The magazines it draws share one, through
+ * `sharedResources`, freed with the last of them.
+ */
+export function createPaperPattern(renderer: THREE.WebGLRenderer): THREE.CanvasTexture {
+  const texture = new THREE.CanvasTexture(paperPatternCanvas())
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
   texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
   return texture

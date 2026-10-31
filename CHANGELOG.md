@@ -6,6 +6,10 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+- The built-in paper grain is drawn once per page and kept, instead of once per magazine
+  (about 80 ms each on a laptop, most of a ten-booklet gallery's start), and magazines drawn
+  by one renderer share its texture, freed with the last of them. It looks the same.
+
 ## [0.1.7]
 
 - Single layout: turning the last page with `loop` on uncovers the cover. Read pages that had
