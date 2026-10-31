@@ -191,7 +191,9 @@ renderer.setAnimationLoop((now) => {
 - **Depth.** See [Depth](#depth): the sheets stand a little apart, which needs enough depth
   precision from your camera.
 - **Several magazines.** Magazines drawn by the same renderer share the built-in grain's
-  texture: made for the first, freed with the last. The grain itself is drawn once per page.
+  texture and the sheet geometry of each layout and page aspect: made for the first, freed
+  with the last. The grain itself is drawn once per page, and the wrinkles are sampled once
+  per aspect.
 - **Rendering on demand.** If you only draw when something changes, listen for `change`:
   it fires when input, loading or a method call needs a frame. Then keep drawing while
   `tick()` returns true.

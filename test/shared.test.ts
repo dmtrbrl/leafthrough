@@ -81,3 +81,42 @@ test('the shared resources belong to the renderer', () => {
   one.dispose()
   two.dispose()
 })
+
+// the geometry the first sheet is drawn with
+const geometryOf = (m: LeafThroughObject) => (m.children[0].children[0] as THREE.Mesh).geometry
+
+test('magazines on one renderer share the sheet geometry of their layout and aspect', () => {
+  const a = view(new THREE.WebGLRenderer())
+  const b = view(new THREE.WebGLRenderer())
+  const first = a.make()
+  const second = a.make()
+  const taller = a.make({ pageAspect: 1.5 })
+  const single = a.make({ layout: 'single' })
+  const elsewhere = b.make()
+  try {
+    const geometry = geometryOf(first)
+    expect(geometryOf(second)).toBe(geometry)
+    expect(geometryOf(taller)).not.toBe(geometry)
+    expect(geometryOf(single)).not.toBe(geometry)
+    // another renderer gets its own, with the wrinkles sampled once for both
+    expect(geometryOf(elsewhere)).not.toBe(geometry)
+    expect(geometryOf(elsewhere).attributes.aNoise.array).toBe(geometry.attributes.aNoise.array)
+
+    // a rebuild in the same layout keeps it
+    second.update({ paper: { grain: true, bulge: 0.5 } })
+    expect(geometryOf(second)).toBe(geometry)
+
+    const disposed = vi.fn()
+    geometry.addEventListener('dispose', disposed)
+    first.dispose()
+    expect(disposed).not.toHaveBeenCalled()
+    second.dispose()
+    expect(disposed).toHaveBeenCalledTimes(1)
+  } finally {
+    taller.dispose()
+    single.dispose()
+    elsewhere.dispose()
+    a.dispose()
+    b.dispose()
+  }
+})

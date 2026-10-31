@@ -20,6 +20,7 @@ import {
   type ResolvedSettings,
 } from './options.js'
 import { PaperTextures } from './paper/paperTextures.js'
+import { sharedResources } from './shared.js'
 import { SingleEngine } from './single/SingleEngine.js'
 import { SpreadEngine } from './spread/SpreadEngine.js'
 import { PageLoader } from './textures.js'
@@ -367,6 +368,7 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
       textures: this.options.pages.map((_, i) => this.loader?.textures[i] ?? blank),
       blank: layout === 'single' ? this.paper.back(settings.paper.backColor) : blank,
       pattern: this.paper.grain(settings, this.renderer),
+      shared: sharedResources(this.renderer),
       position: pageToPosition(page, layout, this.pageCount),
       metrics: this.metrics,
       shading: {

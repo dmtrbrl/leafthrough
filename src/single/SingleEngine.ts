@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { floorPoint, type Engine, type EngineContext, type EngineInput, type EngineMetrics } from '../engine.js'
 import type { ResolvedSettings } from '../options.js'
 import { disposeSheetMesh, layerSheet, type SheetMesh } from '../paper/paperMaterial.js'
-import { createSingleGeometry, createSingleSheet, type SingleSheetUniforms } from './singleSheet.js'
+import { createSingleSheet, sharedSingleGeometry, type SingleSheetUniforms } from './singleSheet.js'
 
 // One page in view. Turned pages swing around the spine and roll up around a cone behind
 // the magazine; the unread pile bulges up off the spine. After the last page everything
@@ -120,6 +120,7 @@ export class SingleEngine implements Engine {
   private readonly metrics: EngineMetrics
   private readonly requestFrame: () => void
   private readonly geometry: THREE.BufferGeometry
+  private readonly releaseGeometry: () => void
   private readonly sheets: Sheet[]
   private readonly count: number
   private readonly radiusSpacing: number[]
@@ -155,7 +156,9 @@ export class SingleEngine implements Engine {
     this.maxPosition = this.count
     this.current = clamp(Math.round(ctx.position), 0, Math.max(this.count - 1, 0)) // pages turned
 
-    this.geometry = createSingleGeometry(ctx.settings.pageAspect)
+    const { geometry, release } = sharedSingleGeometry(ctx.shared, ctx.settings.pageAspect)
+    this.geometry = geometry
+    this.releaseGeometry = release
     this.sheets = ctx.textures.map((front, index) => {
       const { mesh, uniforms } = createSingleSheet(this.geometry, front, ctx.blank, ctx.pattern, ctx.settings, ctx.shading)
       this.group.add(mesh)
@@ -257,7 +260,7 @@ export class SingleEngine implements Engine {
     this.cancelHold()
     this.abort.abort()
     for (const sheet of this.sheets) disposeSheetMesh(sheet.mesh)
-    this.geometry.dispose()
+    this.releaseGeometry()
   }
 
   // --- helpers ----------------------------------------------------------------
