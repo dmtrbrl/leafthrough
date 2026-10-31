@@ -13,6 +13,12 @@ All notable changes to this package. The format follows
   about 8 ms a magazine on a laptop and four times that on a phone) is shared by the
   magazines a renderer draws, per layout and page aspect, and freed with the last of them;
   the noise is kept per aspect for magazines on other renderers. The paper looks the same.
+- A three.js `Texture` passed as a page is taken as it is: its `colorSpace`,
+  `premultiplyAlpha` and `anisotropy` are left alone and it's no longer marked for upload, so
+  one that's on the GPU already, or shared with your own material, isn't uploaded a second
+  time. This changes documented behaviour: a texture of yours now needs `colorSpace` set to
+  sRGB, and `premultiplyAlpha` if it has transparent parts, to look as before (see the
+  README's note on textures).
 
 ## [0.1.7]
 

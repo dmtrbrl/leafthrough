@@ -142,12 +142,17 @@ export class PageLoader {
           if (this.owned.delete(texture)) texture.dispose()
           return
         }
-        texture.colorSpace = THREE.SRGBColorSpace
-        // premultiplied, so filtering at the edge of transparent artwork doesn't pull in the
-        // colour of texels nobody sees (the shader lays the page over the paper colour)
-        texture.premultiplyAlpha = true
-        texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
-        texture.needsUpdate = true
+        if (this.owned.has(texture)) {
+          texture.colorSpace = THREE.SRGBColorSpace
+          // premultiplied, so filtering at the edge of transparent artwork doesn't pull in the
+          // colour of texels nobody sees (the shader lays the page over the paper colour)
+          texture.premultiplyAlpha = true
+          texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
+          texture.needsUpdate = true
+        }
+        // A texture passed in is taken as it is, so one that's on the GPU already, or shared
+        // with the caller's own material, isn't uploaded again: initTexture only uploads what
+        // the renderer hasn't got.
         this.renderer.initTexture(texture)
         this.textures[page] = texture
         this.events.onLoad(page, texture)

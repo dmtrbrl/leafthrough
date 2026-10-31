@@ -415,9 +415,12 @@ pages: [
   front page's outline (draw the back page as its mirror image).
 - **Cross-origin URLs.** URLs on another origin need CORS headers, because the images are
   uploaded to WebGL.
-- **Textures.** A three.js `Texture` you pass in is never disposed, but the magazine sets its
-  `colorSpace`, `premultiplyAlpha` and `anisotropy`. Give it a texture of its own if you
-  use the same one elsewhere.
+- **Textures.** A three.js `Texture` you pass in is taken as it is: never disposed, and its
+  `colorSpace`, `premultiplyAlpha` and `anisotropy` are left alone, so one that's on the
+  GPU already, or that your own material uses too, isn't uploaded again. Pages the magazine
+  loads itself are sRGB and premultiplied; for yours to look the same, set `colorSpace` to
+  `THREE.SRGBColorSpace`, and `premultiplyAlpha` to `true` if it has transparent parts (the
+  shader lays it over the paper as premultiplied colour).
 - **Load order.** Pages load nearest the reader first, four at a time, and the order follows
   the reader as they turn or jump. Pages that haven't arrived show blank paper.
 - **Memory.** Pages within `preload` of the visible ones load; pages more than twice that

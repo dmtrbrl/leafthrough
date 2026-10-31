@@ -127,6 +127,29 @@ test("a texture passed in as a page isn't disposed with the loader", async () =>
   texture.dispose()
 })
 
+test('a texture passed in as a page is taken as it is, and not uploaded again', async () => {
+  const texture = new THREE.CanvasTexture(pages(1)[0])
+  texture.anisotropy = 4
+  const version = texture.version
+  const initTexture = vi.fn()
+  const loader = new PageLoader([texture, pages(1)[0]], { ...renderer, initTexture } as unknown as THREE.WebGLRenderer, Infinity, quiet())
+  await loader.start(0, 1, [0, 1])
+  expect(texture.version).toBe(version)
+  expect(texture.colorSpace).toBe(THREE.NoColorSpace)
+  expect(texture.premultiplyAlpha).toBe(false)
+  expect(texture.anisotropy).toBe(4)
+  // still warmed up, which is nothing when it's on the GPU already
+  expect(initTexture).toHaveBeenCalledWith(texture)
+  // a page the loader made itself is set up for the paper shader
+  const own = loader.textures[1]!
+  expect(own.colorSpace).toBe(THREE.SRGBColorSpace)
+  expect(own.premultiplyAlpha).toBe(true)
+  expect(own.anisotropy).toBe(1)
+  expect(initTexture).toHaveBeenCalledWith(own)
+  loader.dispose()
+  texture.dispose()
+})
+
 test('a page that fails to load is reported and the magazine still gets ready', async () => {
   window.Image = OriginalImage
   const onError = vi.fn()
