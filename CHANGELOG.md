@@ -12,10 +12,10 @@ All notable changes to this package. The format follows
   settled flat under the pile lay newest on top, so the last page revealed one of them, and as
   the magazine shut they all crossed on the way to their closed order, the cover rising through
   the rest. They now settle in that order, the cover first, and shutting lifts them as one.
-- three.js demo: with Reduce Motion on, the envelope still opens and the magazine still
-  slides out and back, at the usual pace, as the magazine keeps its own turns. The reveal
-  was skipped before, which on a phone with the setting on looked like nothing happening.
-  Only the automatic turn to pages 4–5 is dropped.
+- three.js demo: plays its motion whatever the system's Reduce Motion setting, the
+  magazine's hover and wobble included. The envelope reveal was skipped under the setting,
+  so on a phone with it on the magazine was simply there while its turns still played,
+  which looked broken.
 
 ## [0.1.6]
 

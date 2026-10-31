@@ -22,10 +22,13 @@ host.append(renderer.domElement)
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50)
 const sunPosition: [number, number, number] = [-3.5, 2.8, 6]
+// The demo is the motion, so it plays whatever the system's Reduce Motion setting says, the
+// magazine's hover and wobble included: with the reveal skipped, it looked like nothing happened.
 const magazine = new LeafThroughObject({ renderer, camera }, {
   pages: demoPages,
   interaction: { keyboard: true },
   lighting: { sun: { position: sunPosition } },
+  motion: { reducedMotion: false },
 })
 magazine.enabled = false
 scene.add(magazine)
@@ -52,9 +55,6 @@ const AWAY = 3.6
 const SLIDE_FROM = 0.2
 const CLEARANCE = ENVELOPE.flapLength + 0.02
 const PRESSED = 0.08
-// Reduce Motion keeps the reveal, as the magazine keeps its turns: it's the demo, and skipping
-// it looked like nothing happening. Only the flourish goes, the automatic turn to pages 4–5.
-const motionMedia = matchMedia('(prefers-reduced-motion: reduce)')
 const DURATION = 2.4
 let progress = 0
 let ready = false
@@ -131,7 +131,7 @@ function advance(dt: number) {
 
 function open() {
   if (state !== 'sealed' || !ready) return
-  autoTurnPending = magazine.layout === 'spread' && !motionMedia.matches
+  autoTurnPending = magazine.layout === 'spread'
   state = 'opening'
   renderer.domElement.focus({ preventScroll: true })
   sync()
