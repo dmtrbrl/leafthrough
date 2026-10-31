@@ -6,6 +6,16 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.7]
+
+- Single layout: turning the last page with `loop` on uncovers the cover. Read pages that had
+  settled flat under the pile lay newest on top, so the last page revealed one of them, and as
+  the magazine shut they all crossed on the way to their closed order, the cover rising through
+  the rest. They now settle in that order, the cover first, and shutting lifts them as one.
+- three.js demo: plays its motion whatever the system's Reduce Motion setting, the
+  magazine's hover and wobble included. The envelope reveal was skipped under the setting,
+  so on a phone with it on the magazine was simply there while its turns still played,
+  which looked broken.
 - The built-in paper grain is drawn once per page and kept, instead of once per magazine
   (about 80 ms each on a laptop, most of a ten-booklet gallery's start), and magazines drawn
   by one renderer share its texture, freed with the last of them. It looks the same.
@@ -26,16 +36,6 @@ All notable changes to this package. The format follows
   three dropped frames) no longer hitches a magazine mid-turn. `pageload` and `onPageLoad`
   still fire per page once it's on the GPU.
 
-## [0.1.7]
-
-- Single layout: turning the last page with `loop` on uncovers the cover. Read pages that had
-  settled flat under the pile lay newest on top, so the last page revealed one of them, and as
-  the magazine shut they all crossed on the way to their closed order, the cover rising through
-  the rest. They now settle in that order, the cover first, and shutting lifts them as one.
-- three.js demo: plays its motion whatever the system's Reduce Motion setting, the
-  magazine's hover and wobble included. The envelope reveal was skipped under the setting,
-  so on a phone with it on the magazine was simply there while its turns still played,
-  which looked broken.
 
 ## [0.1.6]
 
