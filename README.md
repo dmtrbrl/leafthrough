@@ -315,7 +315,7 @@ The magazine fills the element you give it and keeps its proportions, centred.
 | `formatPageLabel` | `(detail) => string`             | `"Pages 14–15 of 28"`                             | What screen readers hear when pages change.                                                                |
 | `onPageChange`    | `(detail) => void`               |                                                   | Same as the `pagechange` event.                                                                            |
 | `onReady`         | `() => void`                     |                                                   | The first pages are loaded and on screen.                                                                  |
-| `onPageLoad`      | `(page) => void`                 |                                                   | A page's image loaded. Same as the `pageload` event.                                                       |
+| `onPageLoad`      | `(page) => void`                 |                                                   | A page's image is loaded and on the GPU. Same as the `pageload` event.                                     |
 | `onError`         | `(error, page?) => void`         |                                                   | A page failed to load. It stays blank paper until `retry()`.                                               |
 
 **`paper`**
@@ -422,7 +422,10 @@ pages: [
   `THREE.SRGBColorSpace`, and `premultiplyAlpha` to `true` if it has transparent parts (the
   shader lays it over the paper as premultiplied colour).
 - **Load order.** Pages load nearest the reader first, four at a time, and the order follows
-  the reader as they turn or jump. Pages that haven't arrived show blank paper.
+  the reader as they turn or jump. Pages that haven't arrived show blank paper. Once decoded,
+  the pages in view and next to them go to the GPU at once; the rest go one per frame, or
+  more in idle time, so a dozen arriving together don't drop a frame. `pageload` fires for
+  each as it's on the GPU.
 - **Memory.** Pages within `preload` of the visible ones load; pages more than twice that
   far away unload, freeing their GPU memory, and load again when the reader comes back.
   Visible means anything on screen: pages still turning in a quick riffle, and in `single`

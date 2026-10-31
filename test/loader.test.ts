@@ -29,14 +29,37 @@ class FakeImage {
 const requested = () => FakeImage.requests.map((image) => image.url)
 const OriginalImage = window.Image
 
+// Stands in for requestIdleCallback: records the callbacks, and lets the test run them with
+// as much idle time as it likes, 10 ms less each time it's asked.
+class FakeIdle {
+  static callbacks: IdleRequestCallback[] = []
+  static cancelled = 0
+  static install() {
+    window.requestIdleCallback = (callback) => FakeIdle.callbacks.push(callback)
+    window.cancelIdleCallback = () => FakeIdle.cancelled++
+  }
+  static run(remaining = 0) {
+    const callbacks = FakeIdle.callbacks
+    FakeIdle.callbacks = []
+    for (const callback of callbacks) callback({ didTimeout: false, timeRemaining: () => (remaining -= 10) + 10 })
+  }
+}
+const originalIdle = { request: window.requestIdleCallback, cancel: window.cancelIdleCallback }
+
 beforeEach(() => {
   FakeImage.requests = []
+  FakeIdle.callbacks = []
+  FakeIdle.cancelled = 0
   window.Image = FakeImage as unknown as typeof Image
 })
 
 afterEach(() => {
   window.Image = OriginalImage
+  window.requestIdleCallback = originalIdle.request
+  window.cancelIdleCallback = originalIdle.cancel
 })
+
+const loaded = (loader: PageLoader) => loader.textures.flatMap((texture, i) => (texture ? [i] : []))
 
 test('the loader keeps at most four requests in flight', async () => {
   const loader = new PageLoader(urls(12), renderer, Infinity, quiet())
@@ -84,10 +107,13 @@ test('of the pages in view, the one being read loads first', () => {
 
 test('pages left far behind are unloaded and freed', async () => {
   window.Image = OriginalImage
+  FakeIdle.install()
   const events = quiet()
   const loader = new PageLoader(pages(30), renderer, 2, events)
   await loader.start(0, 1, [0, 1, 2])
   await pause(0)
+  // page 3 waits for idle time
+  FakeIdle.run()
   const early = loader.textures.slice(0, 4)
   expect(early.every(Boolean)).toBe(true)
   const disposed = vi.fn()
@@ -98,8 +124,64 @@ test('pages left far behind are unloaded and freed', async () => {
   expect(events.onUnload).toHaveBeenCalledTimes(4)
   expect(disposed).toHaveBeenCalledTimes(4)
   await pause(0)
-  expect(loader.textures.filter(Boolean)).toHaveLength(6)
+  FakeIdle.run(50)
+  expect(loaded(loader)).toEqual([18, 19, 20, 21, 22, 23])
   loader.dispose()
+})
+
+test('pages beyond the ones near the reader go to the GPU a frame at a time, nearest first', async () => {
+  window.Image = OriginalImage
+  FakeIdle.install()
+  const events = quiet()
+  const loader = new PageLoader(pages(12), renderer, Infinity, events)
+  await loader.start(0, 0, [0, 1])
+  await pause(0)
+  // the first pages and the one next to the view at once; the rest wait
+  expect(loaded(loader)).toEqual([0, 1])
+  expect(events.onLoad).toHaveBeenCalledTimes(2)
+  expect(FakeIdle.callbacks).toHaveLength(1)
+  FakeIdle.run()
+  expect(loaded(loader)).toEqual([0, 1, 2])
+  expect(events.onLoad).toHaveBeenLastCalledWith(2, loader.textures[2])
+  // with idle time to spare, more go
+  FakeIdle.run(20)
+  expect(loaded(loader)).toEqual([0, 1, 2, 3, 4, 5])
+  // the reader jumping ahead gets the pages there at once, and the queue follows
+  loader.focus(10, 10)
+  expect(loaded(loader)).toEqual([0, 1, 2, 3, 4, 5, 9, 10, 11])
+  FakeIdle.run()
+  expect(loaded(loader)).toEqual([0, 1, 2, 3, 4, 5, 8, 9, 10, 11])
+  FakeIdle.run(50)
+  expect(loaded(loader)).toHaveLength(12)
+  expect(FakeIdle.callbacks).toHaveLength(0)
+  loader.dispose()
+})
+
+test('waiting pages left far behind are dropped, and dispose() cancels the rest', async () => {
+  window.Image = OriginalImage
+  FakeIdle.install()
+  const events = quiet()
+  const loader = new PageLoader(pages(30), renderer, 3, events)
+  await loader.start(0, 0, [0])
+  await pause(0)
+  expect(loaded(loader)).toEqual([0, 1])
+  loader.focus(20)
+  await pause(0)
+  expect(loaded(loader)).toEqual([19, 20, 21])
+  FakeIdle.run(50)
+  expect(loaded(loader)).toEqual([17, 18, 19, 20, 21, 22, 23])
+  // 2 and 3 were decoded but never shown; nothing is reported for them
+  expect(events.onUnload.mock.calls.map(([page]) => page)).toEqual([0, 1])
+  expect(events.onLoad).not.toHaveBeenCalledWith(2, expect.anything())
+  expect(events.onLoad).not.toHaveBeenCalledWith(3, expect.anything())
+
+  loader.focus(0)
+  await pause(0)
+  expect(FakeIdle.callbacks).toHaveLength(1)
+  loader.dispose()
+  expect(FakeIdle.cancelled).toBe(1)
+  FakeIdle.run(50)
+  expect(events.onLoad).not.toHaveBeenCalledWith(2, expect.anything())
 })
 
 test('retry() loads failed pages again', async () => {

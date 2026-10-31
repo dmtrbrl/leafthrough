@@ -19,6 +19,12 @@ All notable changes to this package. The format follows
   time. This changes documented behaviour: a texture of yours now needs `colorSpace` set to
   sRGB, and `premultiplyAlpha` if it has transparent parts, to look as before (see the
   README's note on textures).
+- Pages decoded together no longer go to the GPU in one go. The pages in view and next to
+  them upload as they arrive; the rest go one per frame, or more in idle time where the
+  browser offers it (`requestIdleCallback`), nearest the reader first, and a page the reader
+  turns to meanwhile goes at once. `update({ pages })` with a dozen preloaded pages (55 ms,
+  three dropped frames) no longer hitches a magazine mid-turn. `pageload` and `onPageLoad`
+  still fire per page once it's on the GPU.
 
 ## [0.1.7]
 
