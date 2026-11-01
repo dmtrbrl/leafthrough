@@ -18,6 +18,8 @@ All notable changes to this package. The format follows
 - Demo: on a phone the magazine no longer shows small for a moment and then jumps to size when
   a page loads. The stage's layout attribute, which its CSS sizes the magazine by, was first
   set by the panel's quarter-second refresh; it's set before the magazine's first frame now.
+- Demo: a double tap on a button, such as the page arrows, no longer zooms the page on a phone,
+  where that was hard to undo. Pinch zoom still works.
 
 ## [0.1.7]
 
