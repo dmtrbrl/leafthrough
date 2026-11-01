@@ -302,8 +302,8 @@ test('preload keeps only the pages near the reader', async () => {
     expect(loaded()).toEqual([0, 1, 2])
     m.goTo(30)
     internals(m).frame(performance.now())
-    await pause()
-    // pages 29 and 30 show, and two either side
-    expect(loaded()).toEqual([27, 28, 29, 30, 31, 32])
+    // pages 29 and 30 show, and two either side; the outer two wait for idle time to upload,
+    // up to UPLOAD_TIMEOUT, so a busy machine can take longer than a fixed pause
+    await vi.waitFor(() => expect(loaded()).toEqual([27, 28, 29, 30, 31, 32]), { timeout: 1000 })
   })
 })
