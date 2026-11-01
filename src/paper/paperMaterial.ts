@@ -228,15 +228,30 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
 
 /**
  * Give a material using BasicShadowMap a soft PCF-like lookup in its onBeforeCompile
- * callback. BasicShadowMap avoids the hardware depth comparison that can darken a whole
- * scene in iOS Safari. This changes only the shader passed in, not three's shared chunks.
+ * callback. Since 0.182, three.js samples PCF shadows through a hardware depth comparison,
+ * which iOS Safari answers with "in shadow" everywhere; BasicShadowMap avoids it. This
+ * changes only the shader passed in, not three's shared chunks. With an older three.js,
+ * whose PCF works on iOS, it returns the shader unchanged.
  */
 export function withSoftBasicShadows(fragmentShader: string) {
+  const chunk = softShadowChunk()
+  return chunk ? fragmentShader.replace('#include <shadowmap_pars_fragment>', chunk) : fragmentShader
+}
+
+/** Whether withSoftBasicShadows can soften this three.js's basic shadow map. */
+export function softensBasicShadows() {
+  return softShadowChunk() !== null
+}
+
+// three's shadow chunk with the basic getShadow swapped for PCF's sampling, done in the shader.
+// Null before three.js 0.182, whose basic map is a packed colour texture this lookup can't
+// read, and if a future three.js words the chunk differently.
+function softShadowChunk() {
   const chunk = THREE.ShaderChunk.shadowmap_pars_fragment
+  if (!chunk.includes('sampler2DShadow')) return null
   const start = chunk.search(/#else\s+float\s+getShadow\(\s*sampler2D\s+shadowMap\b/)
   const end = start < 0 ? -1 : closingEndif(chunk, start)
-  // If a future three.js words this differently, the basic map just stays hard-edged.
-  if (end < 0 || !fragmentShader.includes('#include <shadowmap_pars_fragment>')) return fragmentShader
+  if (end < 0) return null
   const basic = /* glsl */ `#else
     float interleavedGradientNoise( vec2 position ) {
       return fract( 52.9829189 * fract( dot( position, vec2( 0.06711056, 0.00583715 ) ) ) );
@@ -275,7 +290,7 @@ export function withSoftBasicShadows(fragmentShader: string) {
       #endif
       bool inFrustum = shadowCoord.x >= 0.0 && shadowCoord.x <= 1.0 && shadowCoord.y >= 0.0 && shadowCoord.y <= 1.0;
       if ( inFrustum && shadowCoord.z <= 1.0 ) {
-        float radius = shadowRadius / shadowMapSize.x;
+        vec2 radius = shadowRadius / shadowMapSize;
         float phi = interleavedGradientNoise( gl_FragCoord.xy ) * PI2;
         shadow = 0.0;
         for ( int i = 0; i < 5; i ++ ) {
@@ -286,7 +301,7 @@ export function withSoftBasicShadows(fragmentShader: string) {
       return mix( 1.0, shadow, shadowIntensity );
     }
   `
-  return fragmentShader.replace('#include <shadowmap_pars_fragment>', chunk.slice(0, start) + basic + chunk.slice(end))
+  return chunk.slice(0, start) + basic + chunk.slice(end)
 }
 
 // The #endif that closes the block open at `from`, past the #ifdefs nested inside it.

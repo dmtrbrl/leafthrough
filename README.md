@@ -188,12 +188,13 @@ renderer.setAnimationLoop((now) => {
   the spine, where the shadow map can't. `update({ lighting: { shadows } })` switches the
   sheets' shadows without a rebuild. Use it rather than setting `castShadow` or
   `receiveShadow` on the sheets, which the magazine sets itself.
-  On iOS Safari, use `THREE.BasicShadowMap` on your renderer: its PCF hardware depth
-  comparison can shade the whole scene. The paper restores the soft PCF look of
-  directional and spot light shadows itself when your renderer uses Basic; point light
-  shadows stay hard-edged. For another receiving material, use
-  `withSoftBasicShadows` in its `onBeforeCompile` callback; the [three.js demo](demo/main-three.ts)
-  shows this for a `ShadowMaterial` floor.
+  With three.js 0.182 or later, use `THREE.BasicShadowMap` on your renderer for iOS Safari:
+  from that version PCF goes through a hardware depth comparison that can shade the whole
+  scene there. The paper restores the soft PCF look of directional and spot light shadows
+  itself when your renderer uses Basic; point light shadows stay hard-edged. For another
+  receiving material, use `withSoftBasicShadows` in its `onBeforeCompile` callback; the
+  [three.js demo](demo/main-three.ts) shows this for a `ShadowMaterial` floor. Older
+  three.js versions sample PCF in the shader, which works on iOS, so keep PCF with them.
 - **Depth.** See [Depth](#depth): the sheets stand a little apart, which needs enough depth
   precision from your camera.
 - **Several magazines.** Magazines drawn by the same renderer share the built-in grain's

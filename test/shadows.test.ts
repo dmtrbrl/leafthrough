@@ -1,12 +1,27 @@
 import * as THREE from 'three'
 import { expect, test } from 'vitest'
 import { LeafThroughObject } from '../src/LeafThroughObject.js'
-import { withSoftBasicShadows } from '../src/paper/paperMaterial.js'
-import { base, pages } from './helpers.js'
+import { softensBasicShadows, withSoftBasicShadows } from '../src/paper/paperMaterial.js'
+import { base, internals, pages, withMagazine } from './helpers.js'
 
 const HARD_LOOKUP = /texture2D\( shadowMap, shadowCoord\.xy \)/g
+// From three.js 0.182, PCF samples through the hardware depth comparison iOS Safari gets
+// wrong, and the basic map is a depth texture the soft lookup reads. Older versions do PCF
+// in the shader and pack depth into colour, so there's nothing to soften. CI runs both.
+const hardwarePCF = THREE.ShaderChunk.shadowmap_pars_fragment.includes('sampler2DShadow')
 
-test("the soft lookup replaces the basic getShadow of the installed three.js, and nothing else", () => {
+test('the magazine uses a basic shadow map only where it can soften it', () =>
+  withMagazine({}, (m) => {
+    expect(softensBasicShadows()).toBe(hardwarePCF)
+    expect(internals(m).renderer.shadowMap.type).toBe(hardwarePCF ? THREE.BasicShadowMap : THREE.PCFShadowMap)
+  }))
+
+test.skipIf(hardwarePCF)('before three.js 0.182 the soft lookup leaves shaders alone', () => {
+  const shader = '#include <shadowmap_pars_fragment>\nvoid main() {}'
+  expect(withSoftBasicShadows(shader)).toBe(shader)
+})
+
+test.runIf(hardwarePCF)('the soft lookup replaces the basic getShadow of the installed three.js, and nothing else', () => {
   const chunk = THREE.ShaderChunk.shadowmap_pars_fragment
   const shader = withSoftBasicShadows('#include <shadowmap_pars_fragment>\nvoid main() {}')
   expect(shader).not.toContain('#include <shadowmap_pars_fragment>')
@@ -61,7 +76,7 @@ function shadowRow(soft: boolean) {
   return Array.from({ length: 64 }, (_, x) => 1 - pixels[(32 * 64 + x) * 4] / 255)
 }
 
-test('under a basic shadow map, the soft lookup shades like PCF: dark under the caster, soft at its edge', () => {
+test.runIf(hardwarePCF)('under a basic shadow map, the soft lookup shades like PCF: dark under the caster, soft at its edge', () => {
   const hard = shadowRow(false)
   const soft = shadowRow(true)
   const between = (row: number[]) => row.filter((v) => v > 0.1 && v < 0.9).length

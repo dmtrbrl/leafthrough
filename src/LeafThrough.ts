@@ -18,7 +18,7 @@ import {
   type ResolvedSettings,
 } from './options.js'
 import { colorKey, PaperTextures } from './paper/paperTextures.js'
-import { withSoftBasicShadows } from './paper/paperMaterial.js'
+import { softensBasicShadows, withSoftBasicShadows } from './paper/paperMaterial.js'
 import { sharedResources } from './shared.js'
 import { PlainEngine } from './plain/PlainEngine.js'
 import { SingleEngine } from './single/SingleEngine.js'
@@ -735,7 +735,10 @@ function createRenderer(canvas: HTMLCanvasElement) {
   }
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.BasicShadowMap
+  // From three.js 0.182, PCF goes through a hardware depth comparison that iOS Safari gets
+  // wrong, so the paper and floor soften a basic map in their own shaders. Before that, PCF
+  // sampled in the shader and works everywhere.
+  renderer.shadowMap.type = softensBasicShadows() ? THREE.BasicShadowMap : THREE.PCFShadowMap
   // shadows only re-render on frames where something moved
   renderer.shadowMap.autoUpdate = false
   return renderer

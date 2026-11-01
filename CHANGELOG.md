@@ -7,13 +7,15 @@ All notable changes to this package. The format follows
 ## [Unreleased]
 
 - iOS Safari drew the whole scene in shadow: the floor's shadow covered everything and the
-  pages looked dull. three.js's PCF shadows sample the shadow map through a hardware depth
-  comparison, which iOS Safari answers with "in shadow" everywhere. The built-in magazine
-  now uses a basic shadow map, and its paper and floor do PCF's soft sampling in their own
-  shaders, so the shadows look as they did. In a `LeafThroughObject` the renderer's shadow
-  type stays the host's choice: under `THREE.BasicShadowMap` the paper softens its
-  directional and spot light shadows the same way, and the new `withSoftBasicShadows` does
-  it for the host's other materials. The three.js demo now uses it for its floor.
+  pages looked dull. Since 0.182, three.js's PCF shadows sample the shadow map through a
+  hardware depth comparison, which iOS Safari answers with "in shadow" everywhere. With
+  those versions the built-in magazine now uses a basic shadow map, and its paper and floor
+  do PCF's soft sampling in their own shaders, so the shadows look as they did; with older
+  ones it keeps PCF, which sampled in the shader all along. In a `LeafThroughObject` the
+  renderer's shadow type stays the host's choice: under `THREE.BasicShadowMap` the paper
+  softens its directional and spot light shadows the same way, and the new
+  `withSoftBasicShadows` does it for the host's other materials. The three.js demo now uses
+  it for its floor.
 - A sheet curling near the edge of the view had a stepped band along the curl, lit as if it
   were the other side of the paper. Each side's lighting was chosen by whether its normal
   pointed along the view axis, which only means facing the camera in the middle of the view.
