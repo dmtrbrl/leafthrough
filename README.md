@@ -188,6 +188,13 @@ renderer.setAnimationLoop((now) => {
   the spine, where the shadow map can't. `update({ lighting: { shadows } })` switches the
   sheets' shadows without a rebuild. Use it rather than setting `castShadow` or
   `receiveShadow` on the sheets, which the magazine sets itself.
+  With three.js 0.182 or later, use `THREE.BasicShadowMap` on your renderer for iOS Safari:
+  from that version PCF goes through a hardware depth comparison that can shade the whole
+  scene there. The paper restores the soft PCF look of directional and spot light shadows
+  itself when your renderer uses Basic; point light shadows stay hard-edged. For another
+  receiving material, use `withSoftBasicShadows` in its `onBeforeCompile` callback; the
+  [three.js demo](demo/main-three.ts) shows this for a `ShadowMaterial` floor. Older
+  three.js versions sample PCF in the shader, which works on iOS, so keep PCF with them.
 - **Depth.** See [Depth](#depth): the sheets stand a little apart, which needs enough depth
   precision from your camera.
 - **Several magazines.** Magazines drawn by the same renderer share the built-in grain's
@@ -382,9 +389,14 @@ magazine.addEventListener('pageload', (e) => e.detail)    // { page }
 magazine.addEventListener('error', (e) => e.detail)       // { error, page }
 ```
 
-Both compare options by value. Changing callbacks or the label is free. Changing `pages`,
-`layout`, paper, lighting, motion or interaction rebuilds the scene (a few milliseconds)
-and keeps the reader on the same page. In a `LeafThroughObject`, `lighting.shadows` and
+Both compare options by value. Changing callbacks or the label is free. Replacing page
+images without changing the count updates those sheets in place, and the magazine stays
+ready; loaded images whose sources stay the same survive a rebuild. Changing the page
+count, `layout`, paper, lighting, motion or interaction rebuilds the scene (a few
+milliseconds), keeps the reader on the same page, and fires `ready` again once the pages
+are in if their images changed. A rebuilt scene is laid out at once, so it can be drawn
+straight away, even when the change is made from a `ready` or `pagechange` handler during
+`tick()`. In a `LeafThroughObject`, `lighting.shadows` and
 new values for `deform`'s uniforms apply without a rebuild. `startPage` only applies at creation; use `goTo()`
 after that. The React, Vue and Svelte bindings and the element use `setOptions()`, so
 removing a prop or attribute restores its default. Options are copied on every call, so an
@@ -417,7 +429,8 @@ pages: [
   uploaded to WebGL.
 - **Textures.** A three.js `Texture` you pass in is taken as it is: never disposed, and its
   `colorSpace`, `premultiplyAlpha` and `anisotropy` are left alone, so one that's on the
-  GPU already, or that your own material uses too, isn't uploaded again. Pages the magazine
+  GPU already, or that your own material uses too, isn't uploaded again. It appears on
+  its sheet synchronously, including after `update({ pages })`. Pages the magazine
   loads itself are sRGB and premultiplied; for yours to look the same, set `colorSpace` to
   `THREE.SRGBColorSpace`, and `premultiplyAlpha` to `true` if it has transparent parts (the
   shader lays it over the paper as premultiplied colour).

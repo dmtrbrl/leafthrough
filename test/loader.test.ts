@@ -209,6 +209,49 @@ test("a texture passed in as a page isn't disposed with the loader", async () =>
   texture.dispose()
 })
 
+test('changing one ready texture swaps it now and keeps every other page', async () => {
+  const first = pages(3)
+  const replacement = new THREE.Texture()
+  const events = quiet()
+  const loader = new PageLoader(first, renderer, Infinity, events)
+  await loader.start(0, 2, [0, 1, 2])
+  const [cover, , back] = loader.textures
+  loader.setSources([first[0], replacement, first[2]])
+  expect(loader.textures).toEqual([cover, replacement, back])
+  expect(events.onUnload).toHaveBeenCalledWith(1)
+  expect(events.onLoad).toHaveBeenLastCalledWith(1, replacement)
+  loader.dispose()
+})
+
+test('changing a page keeps requests for the unchanged pages in flight', () => {
+  const loader = new PageLoader(urls(3), renderer, Infinity, quiet())
+  void loader.start(0, 2, [0, 1, 2])
+  loader.setSources(['page0.png', 'new-page.png', 'page2.png'])
+  expect(requested()).toEqual(['page0.png', '(aborted)', 'page2.png', 'new-page.png'])
+  loader.dispose()
+})
+
+test("changing a page doesn't retry the unchanged pages that failed", async () => {
+  const loader = new PageLoader(urls(2), renderer, Infinity, quiet())
+  const ready = loader.start(0, 1, [0, 1])
+  FakeImage.requests[0].onerror!()
+  FakeImage.requests[1].onerror!()
+  await ready
+  loader.setSources(['page0.png', 'new-page.png'])
+  expect(requested()).toEqual(['page0.png', 'page1.png', 'new-page.png'])
+  loader.dispose()
+})
+
+test('inserting a page keeps decoded images under their original sources', async () => {
+  const first = pages(3)
+  const loader = new PageLoader(first, renderer, Infinity, quiet())
+  await loader.start(0, 2, [0, 1, 2])
+  const saved = [...loader.textures]
+  loader.setSources([new THREE.Texture(), ...first])
+  expect(loader.textures.slice(1)).toEqual(saved)
+  loader.dispose()
+})
+
 test('a texture passed in as a page is taken as it is, and not uploaded again', async () => {
   const texture = new THREE.CanvasTexture(pages(1)[0])
   texture.anisotropy = 4

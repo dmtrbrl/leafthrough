@@ -130,11 +130,13 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
         `#include <clipping_planes_fragment>
         ${shader.fragmentChunk ? 'if (sheetHidden(vSheetPosition)) discard;' : ''}`,
       )
-      // light whichever side faces the camera
+      // Light the side the camera sees, by the same test the page colour below uses. The
+      // smoothed normal can't tell: on a curl seen at a slant it points away from the camera
+      // while the triangle under it still faces it, and one side's print got the other's light.
       .replace(
         '#include <normal_fragment_begin>',
         `vec3 normal = normalize(vNormal);
-        float faceDirection = normal.z >= 0.0 ? 1.0 : -1.0;
+        float faceDirection = gl_FrontFacing ? 1.0 : -1.0;
         normal *= faceDirection;
         vec3 nonPerturbedNormal = normal;`,
       )
@@ -179,6 +181,7 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
         `#include <opaque_fragment>
         gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.0), pattern * PATTERN_DARKEN);`,
       )
+    program.fragmentShader = withSoftBasicShadows(program.fragmentShader)
   }
 
   const depthMaterial = new THREE.MeshDepthMaterial({
@@ -221,6 +224,96 @@ function createPaperMaterials(uniforms: SheetUniforms, shader: SheetShader, sett
   distanceMaterial.customProgramCacheKey = () => cacheKey
 
   return { material, depthMaterial, distanceMaterial }
+}
+
+/**
+ * Give a material using BasicShadowMap a soft PCF-like lookup in its onBeforeCompile
+ * callback. Since 0.182, three.js samples PCF shadows through a hardware depth comparison,
+ * which iOS Safari answers with "in shadow" everywhere; BasicShadowMap avoids it. This
+ * changes only the shader passed in, not three's shared chunks. With an older three.js,
+ * whose PCF works on iOS, it returns the shader unchanged.
+ */
+export function withSoftBasicShadows(fragmentShader: string) {
+  const chunk = softShadowChunk()
+  return chunk ? fragmentShader.replace('#include <shadowmap_pars_fragment>', chunk) : fragmentShader
+}
+
+/** Whether withSoftBasicShadows can soften this three.js's basic shadow map. */
+export function softensBasicShadows() {
+  return softShadowChunk() !== null
+}
+
+// three's shadow chunk with the basic getShadow swapped for PCF's sampling, done in the shader.
+// Null before three.js 0.182, whose basic map is a packed colour texture this lookup can't
+// read, and if a future three.js words the chunk differently.
+function softShadowChunk() {
+  const chunk = THREE.ShaderChunk.shadowmap_pars_fragment
+  if (!chunk.includes('sampler2DShadow')) return null
+  const start = chunk.search(/#else\s+float\s+getShadow\(\s*sampler2D\s+shadowMap\b/)
+  const end = start < 0 ? -1 : closingEndif(chunk, start)
+  if (end < 0) return null
+  const basic = /* glsl */ `#else
+    float interleavedGradientNoise( vec2 position ) {
+      return fract( 52.9829189 * fract( dot( position, vec2( 0.06711056, 0.00583715 ) ) ) );
+    }
+    vec2 vogelDiskSample( int sampleIndex, int samplesCount, float phi ) {
+      const float goldenAngle = 2.399963229728653;
+      float r = sqrt( ( float( sampleIndex ) + 0.5 ) / float( samplesCount ) );
+      float theta = float( sampleIndex ) * goldenAngle + phi;
+      return vec2( cos( theta ), sin( theta ) ) * r;
+    }
+    float shadowTexelLit( sampler2D shadowMap, ivec2 texel, ivec2 last, float depth ) {
+      float stored = texelFetch( shadowMap, clamp( texel, ivec2( 0 ), last ), 0 ).r;
+      #ifdef USE_REVERSED_DEPTH_BUFFER
+        return step( stored, depth );
+      #else
+        return step( depth, stored );
+      #endif
+    }
+    float shadowBilinearLit( sampler2D shadowMap, vec2 shadowMapSize, vec2 uv, float depth ) {
+      vec2 p = uv * shadowMapSize - 0.5;
+      ivec2 texel = ivec2( floor( p ) );
+      ivec2 last = ivec2( shadowMapSize ) - 1;
+      vec2 f = fract( p );
+      return mix(
+        mix( shadowTexelLit( shadowMap, texel, last, depth ), shadowTexelLit( shadowMap, texel + ivec2( 1, 0 ), last, depth ), f.x ),
+        mix( shadowTexelLit( shadowMap, texel + ivec2( 0, 1 ), last, depth ), shadowTexelLit( shadowMap, texel + ivec2( 1, 1 ), last, depth ), f.x ),
+        f.y );
+    }
+    float getShadow( sampler2D shadowMap, vec2 shadowMapSize, float shadowIntensity, float shadowBias, float shadowRadius, vec4 shadowCoord ) {
+      float shadow = 1.0;
+      shadowCoord.xyz /= shadowCoord.w;
+      #ifdef USE_REVERSED_DEPTH_BUFFER
+        shadowCoord.z -= shadowBias;
+      #else
+        shadowCoord.z += shadowBias;
+      #endif
+      bool inFrustum = shadowCoord.x >= 0.0 && shadowCoord.x <= 1.0 && shadowCoord.y >= 0.0 && shadowCoord.y <= 1.0;
+      if ( inFrustum && shadowCoord.z <= 1.0 ) {
+        vec2 radius = shadowRadius / shadowMapSize;
+        float phi = interleavedGradientNoise( gl_FragCoord.xy ) * PI2;
+        shadow = 0.0;
+        for ( int i = 0; i < 5; i ++ ) {
+          shadow += shadowBilinearLit( shadowMap, shadowMapSize, shadowCoord.xy + vogelDiskSample( i, 5, phi ) * radius, shadowCoord.z );
+        }
+        shadow *= 0.2;
+      }
+      return mix( 1.0, shadow, shadowIntensity );
+    }
+  `
+  return chunk.slice(0, start) + basic + chunk.slice(end)
+}
+
+// The #endif that closes the block open at `from`, past the #ifdefs nested inside it.
+function closingEndif(chunk: string, from: number) {
+  const directive = /^[ \t]*#\s*(if|ifdef|ifndef|endif)\b/gm
+  directive.lastIndex = from
+  let depth = 0
+  for (let match; (match = directive.exec(chunk)); ) {
+    if (match[1] !== 'endif') depth++
+    else if (depth-- === 0) return match.index
+  }
+  return -1
 }
 
 const DIRECTIONAL_SHADOW =

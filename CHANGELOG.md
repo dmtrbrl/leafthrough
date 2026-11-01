@@ -6,6 +6,29 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+- iOS Safari drew the whole scene in shadow: the floor's shadow covered everything and the
+  pages looked dull. Since 0.182, three.js's PCF shadows sample the shadow map through a
+  hardware depth comparison, which iOS Safari answers with "in shadow" everywhere. With
+  those versions the built-in magazine now uses a basic shadow map, and its paper and floor
+  do PCF's soft sampling in their own shaders, so the shadows look as they did; with older
+  ones it keeps PCF, which sampled in the shader all along. In a `LeafThroughObject` the
+  renderer's shadow type stays the host's choice: under `THREE.BasicShadowMap` the paper
+  softens its directional and spot light shadows the same way, and the new
+  `withSoftBasicShadows` does it for the host's other materials. The three.js demo now uses
+  it for its floor.
+- A sheet curling near the edge of the view had a stepped band along the curl, lit as if it
+  were the other side of the paper. Each side's lighting was chosen by whether its normal
+  pointed along the view axis, which only means facing the camera in the middle of the view.
+  The lighting now picks the side the camera sees the same way the page images do.
+- Replacing one page image (same page count) rebuilt every sheet, and the pages farthest
+  from the reader, such as the back cover, showed blank paper for several frames while
+  their images queued to load again. Now only the changed images load and swap in, the
+  magazine stays ready, and images whose sources are unchanged are kept through a rebuild.
+  A three.js texture passed as a page goes on its sheet in the same task, so it never
+  shows blank for a frame.
+- After a rebuild, such as a layout change, the sheets could be drawn once unstacked, with
+  an inside page over the cover, if the host rendered before its next `tick()`. A rebuilt
+  scene is now laid out straight away.
 - three.js demo: the pages spring back to their full depth over about half a second once the
   sleeve has let go of them, and the shadow they cast spreads out from under the magazine with
   them. They had their depth back within a few frames, so the shadow popped in.
