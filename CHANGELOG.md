@@ -6,6 +6,8 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+## [0.1.8]
+
 - iOS Safari drew the whole scene in shadow: the floor's shadow covered everything and the
   pages looked dull. Since 0.182, three.js's PCF shadows sample the shadow map through a
   hardware depth comparison, which iOS Safari answers with "in shadow" everywhere. With
