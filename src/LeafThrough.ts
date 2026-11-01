@@ -18,6 +18,7 @@ import {
   type ResolvedSettings,
 } from './options.js'
 import { colorKey, PaperTextures } from './paper/paperTextures.js'
+import { withSoftBasicShadows } from './paper/paperMaterial.js'
 import { sharedResources } from './shared.js'
 import { PlainEngine } from './plain/PlainEngine.js'
 import { SingleEngine } from './single/SingleEngine.js'
@@ -88,6 +89,7 @@ export class LeafThrough extends EventTarget {
   private running = false
   private readonly riffle = new Riffle()
   private lastPagesKey = ''
+  private loadVersion = 0
   private ready = false
   private disposed = false
 
@@ -250,12 +252,15 @@ export class LeafThrough extends EventTarget {
 
     const page = this.page
     let rebuild = changed.some((key) => !LIVE_OPTIONS.has(key))
-    // new images load from scratch; a change to only alt or text just updates the content
-    if (changed.includes('pages') && this.pagesKey(next) !== this.lastPagesKey) {
-      this.loader?.dispose()
-      this.loader = null
-      this.resetReady()
-      rebuild = true
+    const imagesChanged = changed.includes('pages') && this.pagesKey(next) !== this.lastPagesKey
+    if (imagesChanged && next.pages.length !== previous.pages.length) rebuild = true
+    if (imagesChanged && !rebuild) {
+      this.loader?.setSources(next.pages.map(pageImage))
+      this.lastPagesKey = this.pagesKey(next)
+      // The magazine stays on screen, so it stays ready; a first load still under way
+      // starts over with the new sources.
+      if (this.loader && !this.ready) this.startPages(this.loader, page, this.pickLayout())
+      this.needsRender = true
     }
     if (changed.includes('preload')) this.loader?.setRadius(preloadRadius(this.options.preload))
     if (rebuild) this.remount(page)
@@ -321,11 +326,18 @@ export class LeafThrough extends EventTarget {
     this.riffle.stop()
     const wasPlain = this.view?.engine instanceof PlainEngine
     this.view?.dispose()
+    this.view = null
 
     const layout = this.pickLayout()
     const settings = resolveSettings(this.options, layout, this.motionMedia.matches)
     this.element.dataset.layout = layout
+    const sourcesChanged = this.lastPagesKey !== this.pagesKey(this.options)
     this.lastPagesKey = this.pagesKey(this.options)
+    this.loader?.setSources(this.options.pages.map(pageImage))
+    if (sourcesChanged && this.loader && this.renderer && !this.options.plain) {
+      this.resetReady()
+      this.startPages(this.loader, page, layout)
+    }
     this.view = this.renderer && !this.options.plain
       ? this.createScene(this.renderer, page, layout, settings)
       : this.createPlain(page, layout, settings, wasPlain)
@@ -398,6 +410,9 @@ export class LeafThrough extends EventTarget {
     let floor: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial> | null = null
     if (layout === 'spread' && shadows && settings.lighting.floorShadow > 0) {
       floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.ShadowMaterial({ opacity: settings.lighting.floorShadow }))
+      floor.material.onBeforeCompile = (program) => {
+        program.fragmentShader = withSoftBasicShadows(program.fragmentShader)
+      }
       floor.position.z = -1e-5
       floor.receiveShadow = true
       scene.add(floor)
@@ -425,6 +440,7 @@ export class LeafThrough extends EventTarget {
     }
     const engine: Engine = layout === 'spread' ? new SpreadEngine(ctx) : new SingleEngine(ctx)
     scene.add(engine.group)
+    engine.update(performance.now())
 
     return {
       engine,
@@ -526,7 +542,11 @@ export class LeafThrough extends EventTarget {
         if (this.loader !== loader) return
         this.view?.engine.setPageTexture(page, texture)
         this.needsRender = true
-        this.pageLoaded(page)
+        // A texture passed in reaches its sheet in the same task, which can be the
+        // constructor's; listeners added right after it still hear about the page.
+        queueMicrotask(() => {
+          if (this.loader === loader && !this.disposed) this.pageLoaded(page)
+        })
       },
       onUnload: (page) => {
         if (this.loader !== loader) return
@@ -538,11 +558,16 @@ export class LeafThrough extends EventTarget {
     this.loader = loader
     this.inView = ''
     this.resetReady()
+    this.startPages(loader, around, layout)
+  }
+
+  private startPages(loader: PageLoader, around: number, layout: Layout) {
+    const version = ++this.loadVersion
     // the pages around the start, so the first turn either way has its next page ready
     const first = [around - 1, around, around + 1, around + 2]
     const visible = this.pagesAt(this.pageToPosition(around, layout), layout)
     loader.start(visible[0] ?? around, visible[visible.length - 1] ?? around, first).then(() => {
-      if (this.loader !== loader || this.disposed) return
+      if (this.loader !== loader || this.disposed || version !== this.loadVersion) return
       this.ready = true
       this.needsRender = true
     })
@@ -710,7 +735,7 @@ function createRenderer(canvas: HTMLCanvasElement) {
   }
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFShadowMap
+  renderer.shadowMap.type = THREE.BasicShadowMap
   // shadows only re-render on frames where something moved
   renderer.shadowMap.autoUpdate = false
   return renderer

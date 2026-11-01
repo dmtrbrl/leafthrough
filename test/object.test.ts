@@ -344,8 +344,69 @@ test.each([['directional', 'cutout'], ['point', 'cutout'], ['directional', 'trim
 // the private state these tests look at
 type ObjectInternals = {
   view: { engine: { sheets: { mesh: THREE.Mesh }[] }; settings: { paper: { sheetGap: number; depthBias: boolean } } }
+  loader: { textures: (THREE.Texture | undefined)[] }
 }
 const viewOf = (m: LeafThroughObject) => (m as unknown as ObjectInternals).view
+
+test('page images change in place, and loaded pages survive a layout rebuild', () =>
+  withObject({ pages: pages(3), preload: Infinity }, (m) => {
+    const before = m as unknown as ObjectInternals
+    const engine = viewOf(m).engine
+    const kept = [...before.loader.textures]
+    const replacement = new THREE.Texture()
+    const sources = (m as unknown as { options: { pages: HTMLCanvasElement[] } }).options.pages
+    m.update({ pages: [sources[0], replacement, ...sources.slice(2)] })
+    expect(viewOf(m).engine).toBe(engine)
+    expect(before.loader.textures).toEqual([kept[0], replacement, ...kept.slice(2)])
+    m.update({ layout: 'spread' })
+    expect(viewOf(m).engine).not.toBe(engine)
+    expect(before.loader.textures).toEqual([kept[0], replacement, ...kept.slice(2)])
+    replacement.dispose()
+  }))
+
+test('a texture passed in is on its sheet as soon as update() returns, and the magazine stays ready', () =>
+  withObject({ layout: 'single', pages: pages(3), preload: Infinity }, async (m) => {
+    let ready = 0
+    m.addEventListener('ready', () => ready++)
+    const replacement = new THREE.Texture()
+    const sources = (m as unknown as { options: { pages: HTMLCanvasElement[] } }).options.pages
+    m.update({ pages: [sources[0], sources[1], replacement] })
+    const sheets = viewOf(m).engine.sheets as unknown as { uniforms: { uFront: { value: THREE.Texture } } }[]
+    expect(sheets[2].uniforms.uFront.value).toBe(replacement)
+    await pause()
+    m.tick()
+    expect(ready).toBe(0)
+    replacement.dispose()
+  }))
+
+test('listeners added right after construction hear about pages passed in as textures', async () => {
+  const renderer = new THREE.WebGLRenderer()
+  const texture = new THREE.Texture()
+  const magazine = new LeafThroughObject({ renderer, camera: new THREE.PerspectiveCamera() }, { ...base, pages: [texture] })
+  const loads: number[] = []
+  magazine.addEventListener('pageload', (e) => loads.push(e.detail.page))
+  await pause(0)
+  expect(loads).toEqual([0])
+  magazine.dispose()
+  renderer.dispose()
+  texture.dispose()
+})
+
+// what a frame draws of each sheet: whether, in which order, and with how much depth bias
+const layering = (m: LeafThroughObject) =>
+  viewOf(m).engine.sheets.map(({ mesh }) => {
+    const material = mesh.material as THREE.Material
+    return [mesh.visible, mesh.renderOrder, material.polygonOffset, material.polygonOffsetUnits]
+  })
+
+test.each(['single', 'spread'] as const)('%s sheets are laid out before the first tick after a rebuild', (layout) =>
+  withObject({ layout, pages: pages(10), paper: { grain: false, depthBias: true } }, (m) => {
+    m.update({ layout: layout === 'single' ? 'spread' : 'single' })
+    const rebuilt = layering(m)
+    expect(rebuilt.some(([, renderOrder]) => (renderOrder as number) > 0)).toBe(true)
+    m.tick()
+    expect(rebuilt).toEqual(layering(m))
+  }))
 
 test('sheets stand apart and sort by depth alone, unless told otherwise', () =>
   withObject({}, (m) => {

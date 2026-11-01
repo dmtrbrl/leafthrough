@@ -37,6 +37,38 @@ test('replacing the pages loads the new textures and fires ready again', () =>
     expect(internals(m).loader.textures.filter(Boolean)).toHaveLength(2)
   }))
 
+test('replacing one page texture keeps the engine, the other textures and the ready state', () =>
+  withMagazine({ pages: pages(3), preload: Infinity }, async (m) => {
+    let ready = 0
+    m.addEventListener('ready', () => ready++)
+    const before = internals(m)
+    const engine = before.view.engine
+    const kept = [...before.loader.textures]
+    const replacement = new THREE.Texture()
+    m.update({ pages: [before.options.pages[0], replacement, before.options.pages[2]] })
+    expect(internals(m).view.engine).toBe(engine)
+    expect(internals(m).loader).toBe(before.loader)
+    expect(internals(m).loader.textures).toEqual([kept[0], replacement, kept[2]])
+    expect(m.element.dataset.state).toBe('ready')
+    await pause()
+    internals(m).frame(performance.now())
+    expect(ready).toBe(0)
+    replacement.dispose()
+  }))
+
+test.each(['single', 'spread'] as const)('%s sheets are laid out before the first frame after a rebuild', (layout) =>
+  withMagazine({ layout, pages: pages(10), paper: { grain: false, depthBias: true } }, (m) => {
+    m.update({ layout: layout === 'single' ? 'spread' : 'single' })
+    const layering = () =>
+      (internals(m).view.engine as unknown as { sheets: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.Material> }[] }).sheets.map(
+        ({ mesh }) => [mesh.visible, mesh.renderOrder, mesh.material.polygonOffset, mesh.material.polygonOffsetUnits],
+      )
+    const rebuilt = layering()
+    expect(rebuilt.some(([, renderOrder]) => (renderOrder as number) > 0)).toBe(true)
+    internals(m).frame(performance.now())
+    expect(rebuilt).toEqual(layering())
+  }))
+
 test.each([
   ['a number', 0xff0000],
   ['a string', '#ff0000'],

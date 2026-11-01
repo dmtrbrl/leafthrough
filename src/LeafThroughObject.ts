@@ -126,6 +126,7 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
   private readonly ends = [new THREE.Vector3(), new THREE.Vector3()]
   private needsRender = true
   private lastPagesKey = ''
+  private loadVersion = 0
   private lastDetailKey = ''
   private inView = ''
   private ready = false
@@ -322,10 +323,14 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
       if (key === 'lighting') return !liveShadows
       return !LIVE_OPTIONS.has(key)
     })
-    if (changed.includes('pages') && this.pagesKey(next) !== this.lastPagesKey) {
-      this.loader?.dispose()
-      this.loader = null
-      rebuild = true
+    const imagesChanged = changed.includes('pages') && this.pagesKey(next) !== this.lastPagesKey
+    if (imagesChanged && next.pages.length !== previous.pages.length) rebuild = true
+    if (imagesChanged && !rebuild) {
+      this.loader?.setSources(next.pages.map(pageImage))
+      this.lastPagesKey = this.pagesKey(next)
+      // The magazine stays on screen, so it stays ready; a first load still under way
+      // starts over with the new sources.
+      if (this.loader && !this.ready) this.startPages(this.loader, page, this.pickLayout())
     }
     if (changed.includes('preload')) this.loader?.setRadius(preloadRadius(this.options.preload))
     if (rebuild) this.remount(page)
@@ -349,10 +354,17 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
     if (this.disposed) return
     this.riffle.stop()
     this.view?.dispose()
+    this.view = null
 
     const layout = this.pickLayout()
     const settings = this.resolve(layout)
+    const sourcesChanged = this.lastPagesKey !== this.pagesKey(this.options)
     this.lastPagesKey = this.pagesKey(this.options)
+    this.loader?.setSources(this.options.pages.map(pageImage))
+    if (sourcesChanged && this.loader) {
+      this.ready = this.readyFired = false
+      this.startPages(this.loader, page, layout)
+    }
     if (!this.loader) this.loadPages(page, layout)
     this.loader?.setWrap(layout === 'single' && settings.loop)
 
@@ -389,6 +401,9 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
         engine.dispose()
       },
     }
+    // A host may render after update() and before its next tick(). Give every new sheet
+    // its resting pose, visibility and stack order now.
+    engine.update(performance.now())
     this.requestFrame()
   }
 
@@ -457,8 +472,13 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
       onLoad: (page, texture) => {
         if (this.loader !== loader) return
         this.view?.engine.setPageTexture(page, texture)
-        this.options.onPageLoad?.(page)
-        this.dispatchEvent({ type: 'pageload', detail: { page } })
+        // A texture passed in reaches its sheet in the same task, which can be the
+        // constructor's; listeners added right after it still hear about the page.
+        queueMicrotask(() => {
+          if (this.loader !== loader || this.disposed) return
+          this.options.onPageLoad?.(page)
+          this.dispatchEvent({ type: 'pageload', detail: { page } })
+        })
       },
       onUnload: (page) => {
         if (this.loader !== loader) return
@@ -469,12 +489,17 @@ export class LeafThroughObject extends THREE.Group<LeafThroughObjectEventMap> {
     this.loader = loader
     this.inView = ''
     this.ready = this.readyFired = false
+    this.startPages(loader, around, layout)
+  }
+
+  private startPages(loader: PageLoader, around: number, layout: Layout) {
+    const version = ++this.loadVersion
     // the pages around the start, so the first turn either way has its next page ready
     const count = this.pageCount
     const first = [around - 1, around, around + 1, around + 2]
     const visible = pagesAt(pageToPosition(around, layout, count), layout, count)
     loader.start(visible[0] ?? around, visible[visible.length - 1] ?? around, first).then(() => {
-      if (this.loader !== loader || this.disposed) return
+      if (this.loader !== loader || this.disposed || version !== this.loadVersion) return
       this.ready = true
       this.requestFrame()
     })

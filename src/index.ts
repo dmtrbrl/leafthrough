@@ -7,6 +7,7 @@ export {
   type LeafThroughObjectOptions,
 } from './LeafThroughObject.js'
 export type { Rect } from './framing.js'
+export { withSoftBasicShadows } from './paper/paperMaterial.js'
 export {
   DEFAULT_PAGE_ASPECT,
   DEFAULT_SPREAD_QUERY,

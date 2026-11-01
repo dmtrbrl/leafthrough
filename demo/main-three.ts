@@ -1,4 +1,4 @@
-import { LeafThroughObject } from 'leafthrough'
+import { LeafThroughObject, withSoftBasicShadows } from 'leafthrough'
 import * as THREE from 'three'
 import { createEnvelope, ENVELOPE } from './envelope'
 import { demoPages } from './pages'
@@ -14,7 +14,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.outputColorSpace = THREE.SRGBColorSpace
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFShadowMap
+renderer.shadowMap.type = THREE.BasicShadowMap
 renderer.domElement.setAttribute('aria-label', 'Interactive magazine. Use the arrow keys to turn pages after opening the envelope.')
 renderer.domElement.tabIndex = 0
 host.append(renderer.domElement)
@@ -43,6 +43,9 @@ sun.shadow.normalBias = 0.002
 sun.shadow.radius = 3
 scene.add(sun, sun.target)
 const table = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.16 }))
+table.material.onBeforeCompile = (program) => {
+  program.fragmentShader = withSoftBasicShadows(program.fragmentShader)
+}
 table.position.z = -0.0005
 table.receiveShadow = true
 scene.add(table)

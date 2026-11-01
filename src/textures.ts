@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { sourceKey } from './content.js'
 import type { PageImage } from './options.js'
 
 // requests in flight at once, so the pages nearest the reader aren't starved
@@ -27,7 +28,7 @@ export interface PageLoaderEvents {
  */
 export class PageLoader {
   /** Loaded textures by page; missing pages are still loading, unloaded or failed. */
-  readonly textures: (THREE.Texture | undefined)[]
+  textures: (THREE.Texture | undefined)[]
   private readonly owned = new Set<THREE.Texture>()
   private readonly inFlight = new Map<number, AbortController>()
   private readonly failed = new Set<number>()
@@ -47,7 +48,7 @@ export class PageLoader {
   private disposed = false
 
   constructor(
-    private readonly sources: PageImage[],
+    private sources: PageImage[],
     private readonly renderer: THREE.WebGLRenderer,
     private radius: number,
     private readonly events: PageLoaderEvents,
@@ -63,11 +64,80 @@ export class PageLoader {
     this.from = from
     this.to = to
     this.first = first.filter((i) => i >= 0 && i < this.sources.length && this.distance(i) <= this.radius)
-    this.waiting = new Set(this.first)
+    this.waiting = new Set(this.first.filter((i) => !this.textures[i]))
     const ready = new Promise<void>((resolve) => (this.settleFirst = resolve))
+    this.showReadyTextures()
     this.focus(from, to)
     if (!this.waiting.size) this.settleFirst()
     return ready
+  }
+
+  /** Changes page sources while keeping decoded textures for sources still in the magazine. */
+  setSources(sources: PageImage[]) {
+    if (this.disposed) return
+    const old = this.sources
+    if (old.length === sources.length && old.every((source, i) => sourceKey(source) === sourceKey(sources[i]))) return
+    const sameAt = (i: number) => i < sources.length && sourceKey(old[i]) === sourceKey(sources[i])
+    for (const [i, request] of this.inFlight) {
+      if (sameAt(i)) continue
+      request.abort()
+      this.inFlight.delete(i)
+    }
+    for (const [i, texture] of this.pending) {
+      if (sameAt(i)) continue
+      this.pending.delete(i)
+      if (this.owned.delete(texture)) texture.dispose()
+    }
+    if (!this.pending.size) {
+      this.cancelUploads?.()
+      this.cancelUploads = null
+    }
+
+    // Match each loaded image to one occurrence of its source. A page inserted before it
+    // can move its texture to a new sheet without another decode or an empty frame.
+    const available = new Map<string, THREE.Texture[]>()
+    old.forEach((source, i) => {
+      const texture = this.textures[i]
+      if (!texture) return
+      const key = sourceKey(source)
+      const matches = available.get(key) ?? []
+      matches.push(texture)
+      available.set(key, matches)
+    })
+    const retained = sources.map((source) => available.get(sourceKey(source))?.shift())
+    const keep = new Set([...retained, ...this.pending.values()])
+    for (const texture of this.owned) if (!keep.has(texture)) {
+      this.owned.delete(texture)
+      texture.dispose()
+    }
+    const previous = this.textures
+    this.sources = sources
+    this.textures = retained
+    // a page that failed and hasn't changed would only fail again
+    for (const i of this.failed) if (!sameAt(i)) this.failed.delete(i)
+    this.first = []
+    this.settleFirst()
+    this.settleFirst = () => {}
+    this.waiting.clear()
+    previous.forEach((texture, i) => {
+      if (texture && texture !== retained[i]) this.events.onUnload(i)
+    })
+    retained.forEach((texture, i) => {
+      if (texture && texture !== previous[i]) this.events.onLoad(i, texture)
+    })
+    this.showReadyTextures()
+    this.focus(this.from, this.to, this.around)
+    this.scheduleUploads()
+  }
+
+  // A caller-supplied Texture has already been decoded. Put it on its sheet in this task,
+  // even when that page is far from the reader or a rebuild is about to draw it.
+  private showReadyTextures() {
+    this.sources.forEach((source, i) => {
+      if (!(source instanceof THREE.Texture) || this.textures[i] === source) return
+      this.show(i, source)
+      if (this.waiting.delete(i) && !this.waiting.size) this.settleFirst()
+    })
   }
 
   /**
@@ -187,7 +257,8 @@ export class PageLoader {
         this.events.onError(page, error)
       })
       .finally(() => {
-        if (this.inFlight.get(page) === request) this.inFlight.delete(page)
+        if (this.inFlight.get(page) !== request) return
+        this.inFlight.delete(page)
         // an aborted page counts too: it's no longer needed to call the magazine ready
         if (this.waiting.delete(page) && !this.waiting.size) this.settleFirst()
         this.pump()

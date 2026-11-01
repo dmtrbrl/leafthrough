@@ -619,7 +619,9 @@ export class SingleEngine implements Engine {
       this.dirty = true
     }
 
-    const dt = this.last ? Math.min((now - this.last) / 1000, 0.1) : 1 / 60
+    // never backwards: a rebuild lays the sheets out at performance.now(), which can be later than the
+    // frame time a host passes to its next tick()
+    const dt = this.last ? clamp((now - this.last) / 1000, 0, 0.1) : 1 / 60
     this.last = now
 
     if (this.drag) {
