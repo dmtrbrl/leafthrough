@@ -201,8 +201,15 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   let state = legacyState() ?? structuredClone(INITIAL)
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
+  // The mounted magazine's layout; before it mounts, the one it will pick: what the options
+  // force, else what its spread query says.
   const layoutNow = (): Layout =>
-    host.handle()?.layout ?? (state.options.layout && state.options.layout !== 'auto' ? state.options.layout : 'spread')
+    host.handle()?.layout ??
+    (state.options.layout && state.options.layout !== 'auto'
+      ? state.options.layout
+      : window.matchMedia(state.options.spreadQuery ?? DEFAULT_SPREAD_QUERY).matches
+        ? 'spread'
+        : 'single')
   const resolved = () => resolveSettings(buildOptions(state), layoutNow(), reducedMotion.matches)
 
   // a control bound to an option path, with its default read from the resolved settings
@@ -709,6 +716,11 @@ export function createDevPanel(container: HTMLElement, host: PanelHost): Panel {
   function syncAll() {
     for (const sync of syncs) sync()
     snippet.textContent = snippetText()
+    // The stage's CSS sizes the magazine by its layout, so the attribute has to be there before
+    // the first frame, not only once the interval below first runs: the single layout's page
+    // is larger than the one the plain box fits, and on a phone the magazine showed small for
+    // a moment and then jumped to size on every load.
+    if (stage) stage.dataset.layout = layoutNow()
   }
 
   function saveQuery() {

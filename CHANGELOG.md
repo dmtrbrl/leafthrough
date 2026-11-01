@@ -6,6 +6,19 @@ All notable changes to this package. The format follows
 
 ## [Unreleased]
 
+- three.js demo: the pages spring back to their full depth over about half a second once the
+  sleeve has let go of them, and the shadow they cast spreads out from under the magazine with
+  them. They had their depth back within a few frames, so the shadow popped in.
+- Demo: on phones the browser's own bars (iOS Safari's status bar and address bar, Android
+  Chrome's toolbar) continue the page's paper colour. The pages name it as their theme colour,
+  which Android and iOS before 26 read, and iOS 26 takes it from the page background instead,
+  where the vignette now fades to that colour before the edges. The page extends under the
+  bars (`viewport-fit=cover`), with the header, the panel and the controls kept clear of the
+  notch and home indicator.
+- Demo: on a phone the magazine no longer shows small for a moment and then jumps to size when
+  a page loads. The stage's layout attribute, which its CSS sizes the magazine by, was first
+  set by the panel's quarter-second refresh; it's set before the magazine's first frame now.
+
 ## [0.1.7]
 
 - Single layout: turning the last page with `loop` on uncovers the cover. Read pages that had
