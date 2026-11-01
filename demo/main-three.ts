@@ -53,8 +53,8 @@ scene.add(envelope)
 const TRAVEL = ENVELOPE.width / 2 + 0.5 + 0.06
 const AWAY = 3.6
 const SLIDE_FROM = 0.2
-const CLEARANCE = ENVELOPE.flapLength + 0.02
 const PRESSED = 0.08
+const RELEASE = 2.6
 const DURATION = 2.4
 let progress = 0
 let ready = false
@@ -77,12 +77,15 @@ function place() {
   envelope.position.x = start + 0.5 - (spread ? 0 : TRAVEL * slide) - AWAY * away
   envelope.visible = away < 1
   magazine.position.x = spread ? start + TRAVEL * slide : 0
-  // Release the pressure once the spine passes the mouth. By the time it clears the
-  // open flap as well, the magazine has its full depth and can start turning pages.
+  // Release the pressure once the spine passes the mouth. The pressed pages spring back over
+  // the next couple of page widths the sleeve draws away, about half a second, so the shadow
+  // they cast spreads out from under the magazine along with their depth instead of popping
+  // in. The pages wait for most of that depth before they start turning.
   const clearance = magazine.position.x - (envelope.position.x + ENVELOPE.width / 2)
+  const released = ease(clearance / RELEASE)
   magazine.position.z = 0.0045 * (1 - part(0.82, 1))
-  magazine.scale.z = THREE.MathUtils.lerp(PRESSED, 1, ease(clearance / CLEARANCE))
-  if (autoTurnPending && clearance >= CLEARANCE) {
+  magazine.scale.z = THREE.MathUtils.lerp(PRESSED, 1, released)
+  if (autoTurnPending && released >= 0.9) {
     autoTurnPending = false
     // The API is zero-based: show printed pages 4–5 while the envelope withdraws.
     if (spread) magazine.goTo(3, { animate: true })
